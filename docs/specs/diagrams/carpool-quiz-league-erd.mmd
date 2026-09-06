@@ -1,0 +1,50 @@
+erDiagram
+    GAME ||--o{ CAR_TEAM : has
+    GAME ||--o{ ROUND : schedules
+    QUESTION ||--o{ ROUND : supplies
+    CAR_TEAM ||--o{ ANSWER : submits
+    ROUND ||--o{ ANSWER : receives
+
+    GAME {
+        uuid id PK
+        string join_code UK
+        string status
+        int round_interval_seconds
+        int question_window_seconds
+        timestamp next_round_at
+    }
+    CAR_TEAM {
+        uuid id PK
+        uuid game_id FK
+        string name
+        string captain_token_hash
+        int score
+    }
+    QUESTION {
+        uuid id PK
+        string type
+        string prompt
+        json choices
+        json correct_answer
+        string explanation
+    }
+    ROUND {
+        uuid id PK
+        uuid game_id FK
+        uuid question_id FK
+        int sequence
+        timestamp starts_at
+        timestamp ends_at
+        timestamp revealed_at
+        int expected_team_count
+        string status
+    }
+    ANSWER {
+        uuid id PK
+        uuid round_id FK
+        uuid car_team_id FK
+        json value
+        timestamp submitted_at
+        boolean is_correct
+        int points_awarded
+    }
