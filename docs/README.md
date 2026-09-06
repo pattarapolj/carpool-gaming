@@ -38,7 +38,7 @@ flowchart LR
 | [Implementation plan](delivery/implementation-plan.md) | Dependency order, milestones, ownership and acceptance gates. | Requirements redefined to match task progress. | Both developers maintain it. |
 | [Quality and release guide](delivery/quality-and-release.md) | Local/CI checks, merge gates, release procedure and maintenance evidence. | Claims that unconfigured automation or unrun releases passed. | Release owner; teammate verifies. |
 
-**How many files in total?** Seven core engineering documents, plus four navigation/team-learning files: the root README, CONTRIBUTING, this index, and the optional testing learning guide. Diagrams support the HLD. You do not need seven new documents per feature: edit the relevant sections of these living documents.
+**How many files in total?** Seven core engineering documents, plus the root README, CONTRIBUTING, and this index. Diagrams support the HLD. You do not need seven new documents per feature: edit the relevant sections of these living documents.
 
 ```text
 README.md                         Setup and observed implementation status
@@ -53,7 +53,6 @@ docs/
     diagrams/                    Conceptual ERD source and export
   testing/
     test-spec.md                 WHAT TO TEST / EXPECTED RESULTS
-    learning-guide.md            Optional exercises, not a second spec
   delivery/
     implementation-plan.md       ORDER / OWNER / DEPENDENCIES
     quality-and-release.md       VERIFY / SHIP / RECOVER / MAINTAIN

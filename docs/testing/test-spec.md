@@ -4,8 +4,6 @@
 
 **Current feature contract:** Read the [create-game behavior contract](../specs/contracts.md) for the exact inputs, outputs, errors and state guarantees behind your current tests. It also identifies details still needing agreement.
 
-**Follow-along exercises:** Start with the [testing learning guide](learning-guide.md). It gives you an order, checkpoints and review questions; you write the tests and implementation yourself.
-
 **Implementation status:** The root [README](../../README.md) owns the last observed check results. Planned cases below are not implemented unless linked to source and run evidence. Implement one behavior at a time; this inventory is not an instruction to create every test file first.
 
 **Related documents:**

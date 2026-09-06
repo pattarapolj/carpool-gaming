@@ -162,8 +162,6 @@ You can write tests for the settled rules while these decisions are discussed. S
 4. If a rule changes, agree on it first, then update this contract, affected design, consumers and tests together.
 5. Treat passing tests as evidence for the current contract. Do not silently edit the contract to match an accidental implementation result.
 
-**Your first task:** use sections 2 and 3 to understand the existing create-game success-case test. Then implement one settled behavior at a time. Use the [learning guide](../testing/learning-guide.md) for the exercise sequence.
-
 ## 8. Other game operations
 
 ### `POST /v1/games/:joinCode/teams`

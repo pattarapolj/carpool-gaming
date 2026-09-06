@@ -55,4 +55,4 @@ Study [the contract tests](packages/contracts/test/create-game.test.ts), then [t
 6. [Implementation plan](docs/delivery/implementation-plan.md)
 7. [Quality and release guide](docs/delivery/quality-and-release.md)
 
-Use [CONTRIBUTING](CONTRIBUTING.md) for Git and teamwork and the [learning guide](docs/testing/learning-guide.md) for the red → green sequence.
+Use [CONTRIBUTING](CONTRIBUTING.md) for Git and teamwork.
