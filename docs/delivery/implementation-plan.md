@@ -1,14 +1,14 @@
 # Carpool Quiz League Implementation Plan
 
-**Document role:** Delivery milestones and dependency order. See the [engineering document map](../README.md) for the six lifecycle phases and the owner of each specification. These ten milestones are not ten SDLC phases.
+**Document role:** Delivery milestones and dependency order. See the [engineering document map](../README.md) for the six lifecycle phases and the authoritative specification for each decision. These ten milestones are not ten SDLC phases.
 
-**Goal:** Deliver the Carpool Quiz League MVP in small, reviewable changes that two developers can build in parallel.
+**Goal:** Deliver the Carpool Quiz League MVP in small, reviewable changes.
 
-**Progress note (2026-09-06):** Task 1 is partial: workspace/API setup and the health test exist; web, database setup, CI and build do not. The shared contract and create-game route tests exist and are intentionally red; the schema is only a placeholder. See [README](../../README.md) for actual check results and [CONTRIBUTING](../../CONTRIBUTING.md) for the two-developer workflow. No task below is marked complete.
+**Progress note (2026-09-06):** Task 1 is partial: workspace/API setup and the health test exist; web, database setup, CI and build do not. The shared contract and create-game route tests exist. See [README](../../README.md) for actual check results and [CONTRIBUTING](../../CONTRIBUTING.md) for the branch workflow. No task below is marked complete.
 
 The tasks are milestones, not mandatory PR sizes. Deliver one reviewable behavior per PR; a large milestone can take several PRs. Write tests for the next behavior and implement it before expanding to the next. Use the contract decision register before committing to an ambiguous contract.
 
-**Architecture:** A React PWA calls one Fastify/Socket.IO backend, backed by PostgreSQL. [HLD](../specs/design.md) owns architectural choices; [LLD](../specs/lld.md) owns functions/schema; [contracts](../specs/contracts.md) own observable behavior; [test specification](../testing/test-spec.md) owns cases and expected results. This file owns sequencing and assignment.
+**Architecture:** A React PWA calls one Fastify/Socket.IO backend, backed by PostgreSQL. [HLD](../specs/design.md) owns architectural choices; [LLD](../specs/lld.md) owns functions/schema; [contracts](../specs/contracts.md) own observable behavior; [test specification](../testing/test-spec.md) owns cases and expected results. This file owns sequencing.
 
 **Tech Stack:** Node.js 22 LTS, TypeScript, pnpm workspace, React 19 + Vite + `vite-plugin-pwa`, Fastify, Socket.IO, PostgreSQL 16, `pg`, Zod, Vitest, Docker Compose.
 
@@ -21,7 +21,7 @@ The tasks are milestones, not mandatory PR sizes. Deliver one reviewable behavio
 - Read the high-level design and LLD before starting any task.
 - Preserve server-authoritative timing, scoring, answer locking, and reveal behavior.
 - Keep the driver out of the app’s interaction model.
-- A shared contract change in `packages/contracts` requires agreement from both developers: the author plus an approving review from the other developer.
+- A shared contract change in `packages/contracts` requires an approving review.
 - One reviewable behavior equals one branch, one pull request, and one focused commit series; milestones may span several such changes.
 - Do not merge until the checks in the CI guide pass.
 
@@ -48,7 +48,6 @@ flowchart LR
 
 ### Task 1: Foundation
 
-**Owner:** Developer A; Developer B reviews the web scaffold.  
 **Files:** Root workspace files; `apps/api` and `apps/web` starter projects; `.github/workflows/ci.yml`.  
 **Depends on:** None.  
 **LLD reference:** §§2–3; CI guide §4.
@@ -62,7 +61,6 @@ flowchart LR
 
 ### Task 2: Shared contracts and database
 
-**Owner:** Developer A.  
 **Files:** `packages/contracts`, `apps/api/migrations/001_initial.sql`, `apps/api/src/db.ts`, database tests.  
 **Depends on:** Task 1.  
 **References:** LLD §§3-4 and 10; contracts common errors and §9 events.
@@ -77,7 +75,6 @@ flowchart LR
 
 ### Task 3: Captain app shell
 
-**Owner:** Developer B.  
 **Files:** `apps/web/src/App.tsx`, `screens/`, `styles.css`, mock state, component tests.  
 **Depends on:** Task 1 and the screen contracts from Task 2.  
 **References:** LLD §§8 and 10; contracts §9 events and §10 synchronization decisions.
@@ -92,7 +89,6 @@ flowchart LR
 
 ### Task 4: Game lobby API and sessions
 
-**Owner:** Developer A.  
 **Files:** `auth.ts`, `game-service.ts`, `routes/games.ts`, API tests.  
 **Depends on:** Task 2.  
 **References:** Contracts §§2-4 and 8; LLD §10 lobby functions.
@@ -106,7 +102,6 @@ flowchart LR
 
 ### Task 5: Create, join, and lobby UI
 
-**Owner:** Developer B.  
 **Files:** `api.ts`, `session.ts`, create/join/host/captain lobby screens, component tests.  
 **Depends on:** Tasks 3 and 4.  
 **LLD reference:** §8 Welcome through Captain lobby.
@@ -121,7 +116,6 @@ flowchart LR
 
 ### Task 6: Round engine and answer endpoint
 
-**Owner:** Developer A.  
 **Files:** `round-service.ts`, `routes/rounds.ts`, round tests.  
 **Depends on:** Task 4.  
 **References:** LLD §§4-5 and 10; contracts §8 answer operation.
@@ -135,7 +129,6 @@ flowchart LR
 
 ### Task 7: Coordinator and Socket.IO server
 
-**Owner:** Developer A.  
 **Files:** `coordinator.ts`, `realtime.ts`, coordinator/socket tests.  
 **Depends on:** Task 6.  
 **References:** LLD §§5 and 10; contracts §9 live events and §10 decisions.
@@ -150,7 +143,6 @@ flowchart LR
 
 ### Task 8: Live captain gameplay and reconnect
 
-**Owner:** Developer B.  
 **Files:** `realtime.ts`, `useGameSnapshot.ts`, question/locked/results/reconnect screens and tests.  
 **Depends on:** Tasks 5 and 7.  
 **References:** LLD §§8 and 10; contracts §9 events and §10 synchronization decisions.
@@ -165,7 +157,6 @@ flowchart LR
 
 ### Task 9: Three-car acceptance verification
 
-**Owner:** Both; Developer A leads server tests, Developer B leads accessibility.  
 **Files:** `game-flow.test.ts`, `docs/testing/manual-three-car-checklist.md`, any defect fixes.  
 **Depends on:** Tasks 7 and 8.  
 **References:** Test specification §§7 and 11; LLD §8 screen behavior.
@@ -175,11 +166,10 @@ flowchart LR
 - [ ] Fix only defects found by that evidence; rerun all checks.
 - [ ] Commit `test: verify three car game flow`.
 
-**Done when:** the automated flow passes and both developers sign the dated manual checklist.
+**Done when:** the automated flow passes and the dated manual checklist is reviewed.
 
 ### Task 10: Production rehearsal
 
-**Owner:** Developer A; Developer B reviews user-facing configuration copy.  
 **Files:** Dockerfiles, `.env.example`, deployment guide, README.  
 **Depends on:** Task 9.  
 **References:** HLD technical choices; quality and release guide §§4-8.
@@ -190,13 +180,13 @@ flowchart LR
 - [ ] Document migration, health check, environment variables, backups, and the single-process limit.
 - [ ] Commit `chore: document production configuration`.
 
-**Done when:** a new developer can follow the deployment guide to run a working two-car game from built containers.
+**Done when:** the deployment guide can be followed from a fresh checkout to run a working two-car game from built containers.
 
 ## Pull-request checklist
 
 - [ ] The branch implements one reviewable behavior or tightly related defect fix and links its product requirement.
 - [ ] Tests were added/updated for the behavior changed.
 - [ ] Focused test, full test suite, lint and type check passed locally; build also passed once implemented (required to complete Foundation).
-- [ ] LLD/API/event changes are reviewed by both developers when contracts change.
+- [ ] LLD/API/event contract changes receive an approving review.
 - [ ] GitHub Actions `verify` job is green.
-- [ ] The other developer approved the pull request.
+- [ ] The pull request is approved.

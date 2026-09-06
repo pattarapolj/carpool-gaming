@@ -25,16 +25,16 @@ pnpm test
 
 Use `-t "test name"` after the file path for one case. pnpm forwards arguments after the script name; these commands do not need an extra `--`. See [pnpm run](https://pnpm.io/cli/run).
 
-At this review the health test passes. The contract suite has 6 intentionally failing positive cases and 10 passing rejection cases; the route suite has 19 intentionally failing cases and 1 database case marked `todo`. Lint and typecheck pass. These failures are the starting TDD specification, not evidence of an implemented route.
+At this review the health and contract suites pass. The create-game route behavior remains red, with its database case marked `todo`. These failures are the starting TDD specification, not evidence of an implemented route.
 
-## 3. Developer loop
+## 3. Change workflow
 
 1. Agree on one issue and its acceptance criteria.
 2. Branch from the shared baseline and write one focused failing test.
 3. Make the real behavior pass, then simplify.
 4. Run the affected suite and all existing workspace checks.
 5. Review the staged diff and commit code, tests and relevant contract/docs together.
-6. Push and request the other developer's review.
+6. Push and request review.
 7. Merge after checks and review pass; release separately when ready.
 
 ## 4. Foundation CI template
@@ -76,9 +76,9 @@ When build scripts arrive, add `pnpm build` locally and to CI. Verify the built 
 
 ## 5. Hosted merge gates
 
-Once CI exists, configure `main` to require the `verify` job, resolved review conversations, and **one approval from the other developer**. Prevent direct pushes and force pushes through the repository's available protection/ruleset settings. A document or workflow alone does not enforce those settings. Availability depends on hosting and plan. See [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
+Once CI exists, configure `main` to require the `verify` job, resolved review conversations, and **one approval**. Prevent direct pushes and force pushes through the repository's available protection/ruleset settings. A document or workflow alone does not enforce those settings. Availability depends on hosting and plan. See [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 
-For a contract change, both developers agree on the design, with the non-author providing the approving review. Recheck substantial changes after review. CI complements human review; neither replaces acceptance criteria.
+Contract changes require an approving review. Recheck substantial changes after review. CI complements human review; neither replaces acceptance criteria.
 
 ## 6. Definition of done
 
@@ -86,16 +86,16 @@ For a contract change, both developers agree on the design, with the non-author 
 - Meaningful behavior has automated evidence; visual/mobile behavior has a relevant manual check when needed.
 - The focused suite, full suite, lint and typecheck pass. Build passes once implemented.
 - Implementation, tests, migrations and affected documentation agree.
-- CI passes once configured, and the other developer approves.
+- CI passes once configured, and the change is approved.
 - Any remaining work is explicitly tracked; it is not described as implemented or verified.
 
-Release additionally needs the deployment and smoke-test evidence described in the developer guide. Foundation Task 1 remains incomplete until its planned tooling exists and is verified.
+Release additionally needs the deployment and smoke-test evidence described in this guide. Foundation Task 1 remains incomplete until its planned tooling exists and is verified.
 
 ## 7. Release rehearsal and execution
 
 **Status:** Procedure and evidence checklist only. No deploy target, migration command, backup command or production start command exists yet. Task 10 must fill in environment-specific commands and rehearse them before this becomes an executable runbook. This document does not claim a release has happened.
 
-| Step | Release owner does | Other developer verifies |
+| Step | Action | Verification |
 |---|---|---|
 | Select revision | Record the reviewed commit/tag, changes and release environment. | Required tests/checks and acceptance evidence match that revision. |
 | Check readiness | Resolve release-blocking contract gaps; confirm configured environment and database target. | No pending completion/capacity/reconnect requirement is silently considered delivered. |
@@ -103,7 +103,7 @@ Release additionally needs the deployment and smoke-test evidence described in t
 | Rehearse migrations | Apply the same migrations to disposable production-like data. | Existing data is preserved and the target revision can start against the resulting schema. |
 | Deploy | Execute the documented migration/deploy sequence on the intended environment. | Actual revision, configuration and health response are correct. |
 | Smoke test | Create a host, join cars, start, answer, reveal and reconnect. | Expected public behavior, permissions and consistent leaderboard hold. |
-| Record outcome | Capture date, revision, environment, both names, checks, defects and recovery actions. | Mark pass/fail from observations; pause promotion or use the rehearsed recovery procedure on failure. |
+| Record outcome | Capture date, revision, environment, checks, defects and recovery actions. | Mark pass/fail from observations; pause promotion or use the rehearsed recovery procedure on failure. |
 
 Do not store environment credentials or real session tokens in release evidence. Add the concrete commands here when the deployment mechanism is chosen; test them against an explicit non-production environment first.
 
@@ -111,6 +111,6 @@ Do not store environment credentials or real session tokens in release evidence.
 
 Record a bug's expected versus actual behavior, reproduction steps, affected revision/environment and a safe request identifier. Trace its requirement/contract and add a regression case to the test specification when needed. The fix follows the same branch, verification and review process as a feature.
 
-For a live incident, one developer coordinates mitigation and the other verifies observed behavior and recovery. Keep a short timeline, impact, cause, resolution and one or two concrete prevention actions. Never label an incident resolved solely because the process restarted; confirm the failed user behavior works.
+For a live incident, coordinate mitigation and independently verify observed behavior and recovery. Keep a short timeline, impact, cause, resolution and one or two concrete prevention actions. Never label an incident resolved solely because the process restarted; confirm the failed user behavior works.
 
 Review dependencies and runtime compatibility as an explicit maintenance change with lockfile and check evidence. Update root README status after tooling or features become verified. Keep release records in the release/PR discussion rather than duplicating them across every specification.

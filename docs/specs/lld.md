@@ -20,24 +20,24 @@ Version 1 is a mobile web game for up to 20 car teams. One passenger-operated ph
 
 See [high-level design](design.md#3-technical-decisions) for the selected stack and its rationale. This LLD owns data and module details.
 
-## 3. Repository and ownership
+## 3. Repository layout
 
 ```text
 apps/
-  api/                         Developer A owns server code
+  api/
     migrations/001_initial.sql
     src/{server,db,auth,game-service,round-service,coordinator,realtime}.ts
     src/routes/{games,rounds}.ts
     test/
-  web/                         Developer B owns browser code
+  web/
     src/{api,realtime,session,App,styles}.ts(x)
     src/screens/
-packages/contracts/            Developer A owns; both approve changes
+packages/contracts/
   src/index.ts
-docs/                          Both own
+docs/
 ```
 
-`packages/contracts` exports all shared Zod schemas, inferred types, and Socket.IO payloads. Neither developer duplicates those types locally. A contract change requires review by both developers before merging.
+`packages/contracts` exports all shared Zod schemas, inferred types, and Socket.IO payloads. Do not duplicate those types locally. Contract changes require review before merging.
 
 ## 4. Persistent data
 
@@ -177,4 +177,4 @@ There is deliberately no final `endGame` signature here: PR-12 lacks the endpoin
 
 For create game: the screen supplies name/interval → the request schema validates and normalizes → the route calls `createGame` → the database persists the lobby and host-token hash → the route returns the public response → the browser saves the session and renders the host lobby.
 
-Every arrow is a place to ask what failure looks like. The test specification determines which arrows need separate evidence and which are exercised together. Internal function names can change; a passing public contract must remain the same unless both developers agree to change it.
+Every arrow is a place to ask what failure looks like. The test specification determines which arrows need separate evidence and which are exercised together. Internal function names can change; a passing public contract must remain the same unless the contract is deliberately changed.

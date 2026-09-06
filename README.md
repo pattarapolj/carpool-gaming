@@ -1,26 +1,52 @@
 # Carpool Quiz League
 
-A passenger-operated trivia game for groups travelling in separate cars. The planned MVP uses a React PWA, Fastify, Socket.IO, and PostgreSQL. Drivers participate verbally only.
+Carpool Quiz League is a slow-paced, passenger-operated trivia game for groups travelling in separate cars. Each car competes as a team, represented in the application by a car captain. Drivers participate verbally while passengers operate the device.
 
-## Current state
+## Game model
 
-This is an early, test-first project, not a playable game yet.
+- A host creates a private game and shares its join code.
+- Each car joins as one team and designates a passenger as captain.
+- Every car receives the same question at the same scheduled time.
+- Captains submit one team answer before the deadline.
+- The server reveals the answer, awards points and publishes the same leaderboard to every car.
+- Rounds are intentionally spaced several minutes apart so the game remains suitable for travel.
 
-| Available | Intentionally left for implementation |
+## Architecture
+
+| Component | Responsibility |
 |---|---|
-| pnpm workspace, API package and contracts package | `POST /v1/games` and every other game route |
-| Fastify `buildServer()` with `GET /health` | PostgreSQL connection, migrations and repositories |
-| Red create-game route and contract tests | Create-game validation, persistence and error handling |
-| Vitest, Biome and TypeScript scripts | Authentication, scoring, timers, sockets and browser app |
+| React PWA | Passenger-facing game screens and session recovery. |
+| Fastify API | HTTP validation, authorization and game operations. |
+| Socket.IO | Synchronized round, answer and leaderboard events. |
+| PostgreSQL | Durable games, teams, questions, rounds and answers. |
+| `packages/contracts` | Shared runtime schemas and TypeScript types used by clients and the API. |
 
-`packages/contracts/src/index.ts` contains an intentionally empty `CreateGameSchema` placeholder. It exists only so the contract tests can compile; filling it in is your first TDD implementation exercise. No create-game route, service, token code, database code, migration, listener or Docker setup is included.
+Server time is authoritative for deadlines, scoring and reveals. Clients display server state but do not determine game outcomes.
 
-## Install and check
+## Repository structure
 
-Use Node.js 22 and pnpm **10.23.0**.
+```text
+apps/api/             Fastify API and API tests
+packages/contracts/   Shared Zod schemas and contract tests
+docs/specs/           Product, architecture, detailed design and API contracts
+docs/testing/         Test strategy and acceptance catalog
+docs/delivery/        Implementation and release processes
+```
+
+## Requirements
+
+- Node.js 22
+- pnpm 10.23.0
+
+## Setup
 
 ```powershell
 pnpm install --frozen-lockfile
+```
+
+## Quality checks
+
+```powershell
 pnpm --filter @carpool/api test test/health.test.ts
 pnpm --filter @carpool/contracts test
 pnpm --filter @carpool/api test test/routes/games.create.test.ts
@@ -28,24 +54,14 @@ pnpm lint
 pnpm typecheck
 ```
 
-Expected state:
-
-- Health test: green.
-- Contract tests: red because `CreateGameSchema` is only a placeholder.
-- Create-game route tests: red because `POST /v1/games` does not exist.
-- One persistence case is explicitly `todo` until you create the migration and guarded test-database helper.
-- Lint and type checking: green.
-
-For the smallest TDD loop, run one named test:
+Run one named test with Vitest's `-t` option:
 
 ```powershell
 pnpm --filter @carpool/contracts test -t "accepts supported round interval 300"
 pnpm --filter @carpool/api test test/routes/games.create.test.ts -t "creates a game with a normalized join code"
 ```
 
-Study [the contract tests](packages/contracts/test/create-game.test.ts), then [the HTTP route tests](apps/api/test/routes/games.create.test.ts). The first HTTP test is labeled Arrange → Act → Assert. The [test catalog](docs/testing/test-spec.md) explains what each named case proves and which test should come next.
-
-## Read in this order
+## Documentation
 
 1. [Product requirements](docs/specs/product.md)
 2. [High-level design](docs/specs/design.md)
@@ -55,4 +71,4 @@ Study [the contract tests](packages/contracts/test/create-game.test.ts), then [t
 6. [Implementation plan](docs/delivery/implementation-plan.md)
 7. [Quality and release guide](docs/delivery/quality-and-release.md)
 
-Use [CONTRIBUTING](CONTRIBUTING.md) for Git and teamwork.
+See [CONTRIBUTING](CONTRIBUTING.md) for the branch, review and commit workflow.

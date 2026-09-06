@@ -27,9 +27,9 @@ git commit -m "test: establish create-game specification"
 
 Never commit `node_modules`, `.pnpm-store`, `.env`, credentials, raw session tokens, database files, logs, coverage or build output.
 
-## Two-developer workflow
+## Branch workflow
 
-Use one short-lived branch per behavior. One developer authors it and the other reviews it. Shared contracts and migrations need the other developer's review because both the browser and API depend on them.
+Use one short-lived branch per behavior. Shared contracts and migrations require review because both the browser and API depend on them.
 
 ```powershell
 git switch main

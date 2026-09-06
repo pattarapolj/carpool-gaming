@@ -3,7 +3,7 @@
 **Purpose:** Own requests, responses, error codes, observable state guarantees and live-event behavior for the MVP. Sections 1–7 explain create game in detail; sections 8–9 cover the remaining operations and events. No application or test implementation is included.
 
 **Status:** Existing specified behavior consolidated from the previous design documents. Unresolved decisions remain explicitly pending. Required behavior is not a claim of implementation.
-**Owner:** API author and browser reviewer agree on changes together. [Product requirements](product.md) define the need; [LLD](lld.md) defines implementation responsibilities; [test specification](../testing/test-spec.md) defines verification.
+[Product requirements](product.md) define the need; [LLD](lld.md) defines implementation responsibilities; [test specification](../testing/test-spec.md) defines verification.
 **Scope:** A shared schema expresses field rules; it does not replace this behavioral agreement.
 
 ## Common request and error behavior
@@ -45,7 +45,7 @@ A contract is the agreement between the caller and your application:
 - **Your application guarantees:** the documented response and state change when the request succeeds.
 - **When it cannot succeed:** your application returns the documented error.
 
-For this feature, the browser developer needs to know what to send and what to expect. The API developer needs to produce that result. Tests check the same agreement. The contract does not prescribe the names of your internal functions or how you split files.
+For this feature, the browser needs to know what to send and what to expect, while the API must produce that result. Tests check the same agreement. The contract does not prescribe the names of internal functions or how files are split.
 
 The **contract defines the rule**, the **catalog lists cases that exercise it**, and the **test checks the actual result**. A future shared schema in `packages/contracts` can express field shapes and validation, but it cannot by itself prove persistence, authorization or other behavior.
 
@@ -154,10 +154,10 @@ These details are not fully specified by the existing documents. Do not turn sug
 
 You can write tests for the settled rules while these decisions are discussed. Stop only the case that depends on an unanswered question.
 
-## 7. How the two developers use this agreement
+## 7. How to use this agreement
 
 1. Read one contract rule together and confirm its meaning with an example.
-2. The browser developer uses the agreed inputs and outputs; the API developer implements the guarantee. Either person can author the corresponding test.
+2. The browser uses the agreed inputs and outputs; the API implements the guarantee.
 3. Link each test to the rule in the PR description or your evidence notes. You do not need to embed IDs in every test name.
 4. If a rule changes, agree on it first, then update this contract, affected design, consumers and tests together.
 5. Treat passing tests as evidence for the current contract. Do not silently edit the contract to match an accidental implementation result.

@@ -1,7 +1,6 @@
 # High-level design
 
 **Status:** Proposed implementation architecture based on the existing MVP design; no new deployment is claimed.
-**Owner:** Developer A; Developer B reviews client/server responsibilities.
 **Purpose:** Explain the major parts, their responsibilities and the reasons for the technical choices. Product requirements live in [product.md](product.md); detailed functions and schema live in [lld.md](lld.md); public behavior lives in [contracts.md](contracts.md).
 
 ## 1. Architecture
@@ -100,7 +99,7 @@ There is no individual-player table: the car is the competing unit. The database
 | Database | PostgreSQL 16 + `pg` | Durable transactions and constraints for fair scoring. |
 | Validation | Zod shared by client and server | One request/event definition. |
 | Tests | Vitest | Fast unit, API, and component testing. |
-| Local services | Docker Compose PostgreSQL | Every developer uses the same database version. |
+| Local services | Docker Compose PostgreSQL | Local environments use the same database version. |
 
 Run a single API process in version 1. The coordinator is intentionally single-process; introduce a distributed job lock only before horizontally scaling the API.
 

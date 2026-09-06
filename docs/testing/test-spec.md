@@ -82,7 +82,7 @@ This is a possible expanded layout. Start with the existing behavior suite and s
 
 ### `packages/contracts/test/create-game.test.ts`
 
-This unit suite proves the complete input boundary once at the shared Zod-schema seam. Route tests still keep representative requests to prove Fastify actually applies that schema. The test file exists and is intentionally red; `CreateGameSchema` is only a compile-time placeholder for you to implement.
+This unit suite proves the complete input boundary once at the shared Zod-schema seam. Route tests still keep representative requests to prove Fastify actually applies that schema. The suite passes for the implemented create-game input rules.
 
 | Test name | Expected behavior |
 |---|---|
