@@ -3,21 +3,21 @@ import { CreateGameSchema } from "../../../../packages/contracts/src/index";
 import { createGame } from "../services/games-services";
 
 export const registerGameRoutes: FastifyPluginAsync = async (app) => {
-  app.post("/v1/games", async (req, res) => {
+  app.post("/v1/games", async (request, reply) => {
     // 1. Validate request.body with CreateGameSchema
-    const parsedBody = CreateGameSchema.safeParse(req.body);
+    const parsedBody = CreateGameSchema.safeParse(request.body);
     // 2. Return 422 when validation fails
     if (!parsedBody.success) {
-      return handleValidationError(req, res, parsedBody.error);
+      return handleValidationError(request, reply, parsedBody.error);
     }
     // 3. Pass the validated input to createGame()
     const createdGame = await createGame(parsedBody.data);
     // 4. Return the created game with HTTP 201
     // 5. Never include the stored host-token hash -- done in games-services
-    return res.status(201).send(createdGame);
+    return reply.code(201).send(createdGame);
   });
 
-  app.setErrorHandler((error, req, res) => {
+  app.setErrorHandler((error, req, reply) => {
     const parserError = error as {
       code?: string;
       message?: string;
@@ -30,7 +30,7 @@ export const registerGameRoutes: FastifyPluginAsync = async (app) => {
         parserError.message?.toLowerCase().includes("json"));
 
     if (isMalformedJson) {
-      return res.status(400).send({
+      return reply.code(400).send({
         error: {
           code: "MALFORMED_JSON",
           message: "Request body contains malformed JSON",
@@ -39,7 +39,7 @@ export const registerGameRoutes: FastifyPluginAsync = async (app) => {
       });
     }
     // case: Other errors
-    return res.status(parserError.statusCode ?? 500).send({
+    return reply.code(parserError.statusCode ?? 500).send({
       error: {
         code: "INTERNAL_SERVER_ERROR",
         message: "An unexpected error occurred",
@@ -49,8 +49,8 @@ export const registerGameRoutes: FastifyPluginAsync = async (app) => {
   });
 };
 
-function handleValidationError(req: any, res: any, error: any) {
-  return res.status(422).send({
+function handleValidationError(req: any, reply: any, error: any) {
+  return reply.code(422).send({
     error: {
       code: "VALIDATION_ERROR",
       message: error.flatten().fieldErrors.name?.join(", "),
