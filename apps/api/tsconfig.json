@@ -5,7 +5,7 @@
 		"moduleResolution": "bundler",
 		"strict": true,
 		"skipLibCheck": false,
-		"types": ["node", "vitest/globals"]
+		"types": ["node", "vitest/globals", "emscripten"]
 	},
 	"include": ["src", "test"]
 }

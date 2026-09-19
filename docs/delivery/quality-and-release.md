@@ -4,7 +4,7 @@
 
 ## 1. Current implementation versus target
 
-As of 2026-09-06, the repository has API and shared-contract tests plus lint and typecheck scripts. It has no `.github/workflows/ci.yml`, `.nvmrc`, browser app, database setup, or build script. The workflow below is a future template, not installed automation. Hosted branch settings have not been configured.
+As of 2026-09-19, the repository has API and shared-contract tests, a create-game route, and a `games` migration. It has no `.github/workflows/ci.yml`, `.nvmrc`, browser app, complete database setup, or build script. The workflow below is a future template, not installed automation. Hosted branch settings have not been configured.
 
 Tests live in ordinary source files. CI runs those files on a clean machine after a push; writing a workflow does not create tests or prove unimplemented behavior.
 
@@ -25,7 +25,7 @@ pnpm test
 
 Use `-t "test name"` after the file path for one case. pnpm forwards arguments after the script name; these commands do not need an extra `--`. See [pnpm run](https://pnpm.io/cli/run).
 
-At this review the health and contract suites pass. The create-game route behavior remains red, with its database case marked `todo`. These failures are the starting TDD specification, not evidence of an implemented route.
+At this review the health, contract, create-game route, and embedded PostgreSQL persistence suites pass, along with lint and typecheck. A live PostgreSQL deployment still requires applying the migration before the route accepts create requests.
 
 ## 3. Change workflow
 

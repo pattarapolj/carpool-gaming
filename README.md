@@ -44,6 +44,14 @@ docs/delivery/        Implementation and release processes
 pnpm install --frozen-lockfile
 ```
 
+The create-game route needs PostgreSQL and the `games` table. Set `DATABASE_URL` for the API and apply `apps/api/migrations/001_games.sql` once with `psql` before creating games:
+
+```powershell
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f apps/api/migrations/001_games.sql
+```
+
+The persistence test uses an in-memory PostgreSQL engine and does not need a running server. As of 2026-09-19, `pnpm test`, `pnpm lint`, and `pnpm typecheck` pass for the create-game branch. The browser app, API start command, and CI are still pending.
+
 ## Quality checks
 
 ```powershell

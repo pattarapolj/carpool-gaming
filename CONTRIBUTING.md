@@ -1,6 +1,6 @@
 # Contributing
 
-This repository is intentionally test-first. The create-game contract and route tests are red because you are expected to implement them.
+This repository is intentionally test-first. The create-game contract, route, and embedded PostgreSQL tests now pass; use the same red-to-green workflow for each new behavior.
 
 ## Work one behavior at a time
 
