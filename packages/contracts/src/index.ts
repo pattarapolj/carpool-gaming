@@ -8,3 +8,7 @@ export const CreateGameSchema = z.object({
 		z.literal(900),
 	]),
 });
+
+export const JoinGameSchema = z.object({
+	name: z.string().trim().min(1).max(60),
+});

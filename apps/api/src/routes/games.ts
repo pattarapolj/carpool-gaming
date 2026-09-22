@@ -1,6 +1,14 @@
 import type { FastifyPluginAsync } from "fastify";
-import { CreateGameSchema } from "../../../../packages/contracts/src/index";
-import { createGame, type GameDb } from "../services/games-services";
+import {
+	CreateGameSchema,
+	JoinGameSchema,
+} from "../../../../packages/contracts/src/index";
+import {
+	createGame,
+	type GameDb,
+	GameJoinError,
+	joinGame,
+} from "../services/games-services";
 
 export const registerGameRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 	app,
@@ -22,6 +30,38 @@ export const registerGameRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 
 		const createdGame = await createGame(parsedBody.data, db);
 		return reply.code(201).send(createdGame);
+	});
+
+	app.post("/v1/games/:joinCode/teams", async (request, reply) => {
+		const parsedBody = JoinGameSchema.safeParse(request.body);
+		if (!parsedBody.success) {
+			return reply.code(422).send({
+				error: {
+					code: "VALIDATION_ERROR",
+					message: parsedBody.error.issues
+						.map((issue) => `${issue.path.join(".")}: ${issue.message}`)
+						.join("; "),
+					requestId: request.id,
+				},
+			});
+		}
+
+		try {
+			const params = request.params as { joinCode: string };
+			const joinedGame = await joinGame(params.joinCode, parsedBody.data, db);
+			return reply.code(201).send(joinedGame);
+		} catch (error) {
+			if (error instanceof GameJoinError) {
+				return reply.code(error.statusCode).send({
+					error: {
+						code: error.code,
+						message: error.message,
+						requestId: request.id,
+					},
+				});
+			}
+			throw error;
+		}
 	});
 
 	app.setErrorHandler((error, request, reply) => {
