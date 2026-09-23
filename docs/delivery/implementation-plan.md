@@ -4,7 +4,7 @@
 
 **Goal:** Deliver the Carpool Quiz League MVP in small, reviewable changes.
 
-**Progress note (2026-09-06):** Task 1 is partial: workspace/API setup and the health test exist; web, database setup, CI and build do not. The shared contract and create-game route tests exist. See [README](../../README.md) for actual check results and [CONTRIBUTING](../../CONTRIBUTING.md) for the branch workflow. No task below is marked complete.
+**Progress note (2026-09-23):** Foundation is still partial: the API process/build commands and Docker Compose API/PostgreSQL stack now exist, while the browser app and CI do not. The create, join and start API slices are implemented; snapshot, leave, rounds and realtime remain pending. The ten milestones are not marked complete. See [README](../../README.md) for the last observed check results and [CONTRIBUTING](../../CONTRIBUTING.md) for the branch workflow.
 
 The tasks are milestones, not mandatory PR sizes. Deliver one reviewable behavior per PR; a large milestone can take several PRs. Write tests for the next behavior and implement it before expanding to the next. Use the contract decision register before committing to an ambiguous contract.
 

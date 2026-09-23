@@ -42,16 +42,17 @@ docs/delivery/        Implementation and release processes
 
 ```powershell
 pnpm install --frozen-lockfile
+Copy-Item .env.example .env
+docker compose up --build
 ```
 
-The game routes need PostgreSQL and the `games` plus `car_teams` tables. Set `DATABASE_URL` for the API and apply the migrations in order with `psql`:
+The API is available at `http://localhost:3000`; check `http://localhost:3000/health`. Compose starts PostgreSQL with a persistent named volume and applies the numbered SQL migrations when creating a new database volume. The database is not exposed on the host.
 
-```powershell
-psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f apps/api/migrations/001_games.sql
-psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f apps/api/migrations/002_car_teams.sql
-```
+`docker compose down` stops the services and keeps the database. `docker compose down -v` also deletes its local data. PostgreSQL's init scripts only run on a new volume; add a migration runner before deploying later schema changes to an existing database.
 
-The persistence tests use an in-memory PostgreSQL engine and do not need a running server. As of 2026-09-22, `pnpm test`, `pnpm lint`, and `pnpm typecheck` pass for the create-game, join-game, and start-game backend slices. The browser app, API start command, and CI are still pending.
+For local development without the API container, set `DATABASE_URL` and run `pnpm dev`. `pnpm build` compiles the API and `pnpm start` runs the compiled server. The example database password is for local development only; replace it before hosting publicly.
+
+The persistence tests use an in-memory PostgreSQL engine and do not need a running server. As of 2026-09-22, `pnpm test`, `pnpm lint`, and `pnpm typecheck` passed for the create-game, join-game, and start-game backend slices. The browser app and CI are still pending.
 
 ## Quality checks
 

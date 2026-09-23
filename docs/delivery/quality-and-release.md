@@ -4,7 +4,7 @@
 
 ## 1. Current implementation versus target
 
-As of 2026-09-19, the repository has API and shared-contract tests, a create-game route, and a `games` migration. It has no `.github/workflows/ci.yml`, `.nvmrc`, browser app, complete database setup, or build script. The workflow below is a future template, not installed automation. Hosted branch settings have not been configured.
+As of 2026-09-23, the API has a process entry point and build/start scripts. Docker Compose runs the API with PostgreSQL and applies the existing migrations when it initializes a new database volume. Snapshot, leave, round and realtime behavior, the browser app, and `.github/workflows/ci.yml` are still pending. The workflow below is a future template, not installed automation. Hosted branch settings have not been configured.
 
 Tests live in ordinary source files. CI runs those files on a clean machine after a push; writing a workflow does not create tests or prove unimplemented behavior.
 
@@ -21,11 +21,14 @@ pnpm --filter @carpool/api test:watch test/routes/games.create.test.ts
 pnpm lint
 pnpm typecheck
 pnpm test
+pnpm build
+pnpm dev
+pnpm start
 ```
 
 Use `-t "test name"` after the file path for one case. pnpm forwards arguments after the script name; these commands do not need an extra `--`. See [pnpm run](https://pnpm.io/cli/run).
 
-At this review the health, contract, create-game route, and embedded PostgreSQL persistence suites pass, along with lint and typecheck. A live PostgreSQL deployment still requires applying the migration before the route accepts create requests.
+The [README](../../README.md) records the last observed test, lint and typecheck results. Docker Compose applies the migrations on a fresh volume; later schema changes to an existing volume need a migration runner before deployment.
 
 ## 3. Change workflow
 
