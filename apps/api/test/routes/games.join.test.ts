@@ -42,6 +42,9 @@ describe("POST /v1/games/:joinCode/teams", () => {
 				throw new Error(`Unexpected query: ${sql}`);
 			},
 			end: async () => {},
+			transaction(run) {
+				return run(this);
+			},
 		});
 
 		try {
@@ -83,6 +86,9 @@ describe("POST /v1/games/:joinCode/teams", () => {
 				throw new Error("validation should not query the database");
 			},
 			end: async () => {},
+			transaction(run) {
+				return run(this);
+			},
 		});
 
 		try {

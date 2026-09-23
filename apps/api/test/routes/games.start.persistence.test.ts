@@ -19,6 +19,7 @@ describe("starting a game with PostgreSQL semantics", () => {
 		app = buildServer({
 			query: (sql, values) => db.query(sql, values),
 			end: () => db.close(),
+			transaction: (run) => db.transaction((tx) => run(tx)),
 		});
 	});
 
@@ -96,6 +97,27 @@ describe("starting a game with PostgreSQL semantics", () => {
 			status: "LOBBY",
 			started_at: null,
 			next_round_at: null,
+		});
+	});
+
+	it("returns not found for a malformed game ID", async () => {
+		const createResponse = await app.inject({
+			method: "POST",
+			url: "/v1/games",
+			payload: { name: "Invalid ID check", roundIntervalSeconds: 300 },
+		});
+		const { hostToken } = createResponse.json();
+
+		const response = await app.inject({
+			method: "POST",
+			url: "/v1/games/not-a-uuid/start",
+			headers: { authorization: `Bearer ${hostToken}` },
+			payload: {},
+		});
+
+		expect(response.statusCode).toBe(404);
+		expect(response.json()).toMatchObject({
+			error: { code: "GAME_NOT_FOUND" },
 		});
 	});
 

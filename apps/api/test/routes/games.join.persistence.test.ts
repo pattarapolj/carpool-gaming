@@ -20,6 +20,7 @@ describe("joining a game with PostgreSQL semantics", () => {
 		app = buildServer({
 			query: (sql, values) => db.query(sql, values),
 			end: () => db.close(),
+			transaction: (run) => db.transaction((tx) => run(tx)),
 		});
 	});
 

@@ -18,6 +18,7 @@ beforeAll(async () => {
 	app = buildServer({
 		query: (sql, values) => db.query(sql, values),
 		end: () => db.close(),
+		transaction: (run) => db.transaction((tx) => run(tx)),
 	});
 });
 

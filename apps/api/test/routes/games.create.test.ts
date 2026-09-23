@@ -26,6 +26,9 @@ describe("POST /v1/games", () => {
 				return { rows: [], rowCount: 1 };
 			},
 			end: async () => {},
+			transaction(run) {
+				return run(this);
+			},
 		});
 	});
 
