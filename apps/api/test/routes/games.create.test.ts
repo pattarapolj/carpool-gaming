@@ -1,11 +1,32 @@
+import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildServer } from "../../src/server";
 
 describe("POST /v1/games", () => {
 	let app: ReturnType<typeof buildServer>;
+	let failQuery: boolean;
+	let collideOnce: boolean;
+	let writes: { sql: string; values: unknown[] }[];
 
 	beforeEach(() => {
-		app = buildServer();
+		failQuery = false;
+		collideOnce = false;
+		writes = [];
+		app = buildServer({
+			query: async (sql: string, values: unknown[]) => {
+				if (failQuery) throw new Error("secret database failure");
+				writes.push({ sql, values });
+				if (collideOnce) {
+					collideOnce = false;
+					throw Object.assign(new Error("duplicate join code"), {
+						code: "23505",
+						constraint: "games_join_code_key",
+					});
+				}
+				return { rows: [], rowCount: 1 };
+			},
+			end: async () => {},
+		});
 	});
 
 	afterEach(async () => {
@@ -162,6 +183,34 @@ describe("POST /v1/games", () => {
 		expect(response.json().error.requestId.length).toBeGreaterThan(0);
 	});
 
+	it("explains an invalid round interval", async () => {
+		const response = await app.inject({
+			method: "POST",
+			url: "/v1/games",
+			payload: { name: "Beach convoy", roundIntervalSeconds: 123 },
+		});
+
+		expect(response.statusCode).toBe(422);
+		expect(response.json().error.message).toContain("roundIntervalSeconds");
+	});
+
+	it("does not report creation when persistence fails", async () => {
+		failQuery = true;
+		const response = await app.inject({
+			method: "POST",
+			url: "/v1/games",
+			payload: { name: "Beach convoy", roundIntervalSeconds: 300 },
+		});
+
+		expect(response.statusCode).toBe(500);
+		expect(response.json().error).toMatchObject({
+			code: "INTERNAL_ERROR",
+			message: expect.any(String),
+			requestId: expect.any(String),
+		});
+		expect(response.body).not.toContain("secret database failure");
+	});
+
 	it("does not return the stored token hash", async () => {
 		const response = await app.inject({
 			method: "POST",
@@ -175,7 +224,38 @@ describe("POST /v1/games", () => {
 		expect(response.body).not.toContain("hostTokenHash");
 	});
 
-	it.todo("creates a persisted game with the hash of the returned host token");
+	it("sends the lobby and host-token hash to persistence", async () => {
+		const response = await app.inject({
+			method: "POST",
+			url: "/v1/games",
+			payload: { name: "  Beach convoy  ", roundIntervalSeconds: 600 },
+		});
+
+		expect(response.statusCode).toBe(201);
+		expect(writes).toHaveLength(1);
+		expect(writes[0].sql).toMatch(/INSERT INTO games/i);
+		expect(writes[0].values).toEqual([
+			response.json().game.id,
+			"Beach convoy",
+			response.json().game.joinCode,
+			createHash("sha256").update(response.json().hostToken).digest("hex"),
+			600,
+		]);
+	});
+
+	it("retries a join-code collision", async () => {
+		collideOnce = true;
+		const response = await app.inject({
+			method: "POST",
+			url: "/v1/games",
+			payload: { name: "Beach convoy", roundIntervalSeconds: 300 },
+		});
+
+		expect(response.statusCode).toBe(201);
+		expect(writes).toHaveLength(2);
+		expect(writes[1].values[2]).toBe(response.json().game.joinCode);
+		expect(writes[0].values[2]).not.toBe(writes[1].values[2]);
+	});
 });
 
 function expectValidationError(statusCode: number, body: unknown) {

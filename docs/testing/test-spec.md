@@ -118,7 +118,7 @@ This integration suite proves constraints that must remain true even if applicat
 
 ## 4. Backend route tests
 
-Create-game route tests call Fastify through `app.inject()` and are intentionally red because the route is not implemented. They do not yet connect to PostgreSQL. The persistence case stays `todo` until you add the guarded database helper and migration; the health route needs no database.
+Create-game route tests call Fastify through `app.inject()`. They use a small query double for HTTP cases; `games.persistence.test.ts` applies the `games` migration to an in-memory PostgreSQL engine and checks stored values and join-code uniqueness. The health route needs no database connection.
 
 Before any truncate/reset helper, validate the dedicated test connection target and fail closed when it is not explicitly configured for tests. Run suites sharing `carpool_test` serially, or isolate a database/schema per worker; concurrent `beforeEach` truncations can erase another test's state. Close apps and pools in cleanup hooks even after assertions fail.
 
@@ -145,7 +145,7 @@ The field cases below are acceptance inventory. Once shared-schema unit tests ow
 | `returns_standard_validation_error_envelope` | A validation error contains `error.code`, human-readable `error.message`, and non-empty `error.requestId`. |
 | `does_not_return_token_hash` | Success JSON contains `hostToken` but never `host_token_hash`. |
 
-The test file implements every non-database case in this table. `creates_persisted_game_with_host_hash` is present as `it.todo` so the suite does not pretend an HTTP-only assertion proves storage.
+`games.create.test.ts` covers the HTTP behavior and persistence failure. `games.persistence.test.ts` checks the stored lobby, interval, host-token hash, and unique join-code constraint against PostgreSQL semantics.
 
 ### `routes/games.join.test.ts`
 

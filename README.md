@@ -44,6 +44,15 @@ docs/delivery/        Implementation and release processes
 pnpm install --frozen-lockfile
 ```
 
+The game routes need PostgreSQL and the `games` plus `car_teams` tables. Set `DATABASE_URL` for the API and apply the migrations in order with `psql`:
+
+```powershell
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f apps/api/migrations/001_games.sql
+psql $env:DATABASE_URL -v ON_ERROR_STOP=1 -f apps/api/migrations/002_car_teams.sql
+```
+
+The persistence tests use an in-memory PostgreSQL engine and do not need a running server. As of 2026-09-22, `pnpm test`, `pnpm lint`, and `pnpm typecheck` pass for the create-game, join-game, and start-game backend slices. The browser app, API start command, and CI are still pending.
+
 ## Quality checks
 
 ```powershell

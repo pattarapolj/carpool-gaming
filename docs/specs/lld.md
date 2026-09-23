@@ -116,7 +116,7 @@ The [test specification](../testing/test-spec.md) owns test cases, fixtures, lev
 
 ## 10. Proposed modules and functions
 
-**Status:** Planning guidance for code you will write. Only `buildServer()` exists today. Names below are proposed interfaces, not implemented exports or a requirement to scaffold every file. Add a function when its behavior is being delivered. Keep private helpers private and reuse existing modules before adding abstractions.
+**Status:** Planning guidance for code you will write. `buildServer()`, the create-game route and service, and the `games` migration now exist. Other names below are proposed interfaces, not implemented exports or a requirement to scaffold every file. Add a function when its behavior is being delivered. Keep private helpers private and reuse existing modules before adding abstractions.
 
 An interface includes its inputs, output, state changes and failure conditions. Return types below are described in words so you can define the actual TypeScript types yourself. Runtime request validation remains necessary even when TypeScript types exist.
 
@@ -124,7 +124,7 @@ An interface includes its inputs, output, state changes and failure conditions. 
 
 | Proposed location / function | Inputs and result | Responsibility and failures | Verification surface |
 |---|---|---|---|
-| `apps/api/src/server.ts`: `buildServer` | Currently no inputs; returns a Fastify app. Accept real dependencies when routes need them. | Register routes and common error handling; do not start a network listener merely to construct a test app. The process that owns shared resources closes them. | Existing health injection test; route/error integration suites. |
+| `apps/api/src/server.ts`: `buildServer` | Optional database dependency; returns a Fastify app. | Register routes and common error handling; do not start a network listener merely to construct a test app. The process that owns shared resources closes them. | Existing health injection test; route/error integration suites. |
 | `packages/contracts/src/index.ts`: named request/event schemas | Untrusted input → validated typed value or validation failure. | Own accepted field shapes/normalization. Define schemas for delivered operations only; a schema has no persistence or scoring responsibility. | Shared-schema cases and representative route application. |
 | `apps/api/src/routes/games.ts`: `registerGameRoutes` | App plus required game/auth dependencies → registered routes. | Parse/validate requests, authenticate protected actions, call the correct operation and map results to the public contract. | HTTP integration; do not write a test just asserting that a registration helper was called. |
 | `apps/api/src/routes/rounds.ts`: `registerAnswerRoutes` | App plus required round/auth dependencies → registered route. | Obtain captain identity from the session, never a caller-supplied team ID; delegate answer behavior. | Answer HTTP integration with real persistence. |
