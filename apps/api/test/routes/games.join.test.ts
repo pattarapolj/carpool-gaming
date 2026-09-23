@@ -9,6 +9,9 @@ describe("POST /v1/games/:joinCode/teams", () => {
 		const writes: { sql: string; values: unknown[] }[] = [];
 		const app = buildServer({
 			query: async (sql: string, values: unknown[]) => {
+				if (["BEGIN", "COMMIT", "ROLLBACK"].includes(sql)) {
+					return { rows: [] };
+				}
 				if (sql.includes("FROM games")) {
 					return {
 						rows: [
@@ -93,6 +96,65 @@ describe("POST /v1/games/:joinCode/teams", () => {
 			expect(response.json()).toMatchObject({
 				error: { code: "VALIDATION_ERROR" },
 			});
+		} finally {
+			await app.close();
+		}
+	});
+
+	it("checks the lobby and inserts the team on one locked transaction", async () => {
+		const transactionQueries: string[] = [];
+		let transactionCalls = 0;
+		const app = buildServer({
+			query: async () => {
+				throw new Error("join must use the transaction connection");
+			},
+			transaction: async (run) => {
+				transactionCalls += 1;
+				return run({
+					query: async (sql: string) => {
+						transactionQueries.push(sql);
+						if (sql.includes("FROM games")) {
+							return {
+								rows: [
+									{
+										id: "game-1",
+										name: "Beach convoy",
+										joinCode: "AB12CD",
+										status: "LOBBY",
+									},
+								],
+							};
+						}
+						if (sql.includes("INSERT INTO car_teams")) {
+							return {
+								rows: [
+									{
+										id: "team-1",
+										name: "Blue Sedan",
+										status: "ACTIVE",
+										score: 0,
+									},
+								],
+							};
+						}
+						throw new Error(`Unexpected transaction query: ${sql}`);
+					},
+				});
+			},
+			end: async () => {},
+		});
+
+		try {
+			const response = await app.inject({
+				method: "POST",
+				url: "/v1/games/AB12CD/teams",
+				payload: { name: "Blue Sedan" },
+			});
+
+			expect(response.statusCode).toBe(201);
+			expect(transactionCalls).toBe(1);
+			expect(transactionQueries).toHaveLength(2);
+			expect(transactionQueries[0]).toMatch(/FOR UPDATE/i);
 		} finally {
 			await app.close();
 		}

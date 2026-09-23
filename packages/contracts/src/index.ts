@@ -12,3 +12,7 @@ export const CreateGameSchema = z.object({
 export const JoinGameSchema = z.object({
 	name: z.string().trim().min(1).max(60),
 });
+
+export const StartGameSchema = z.object({
+	practice: z.boolean().optional().default(false),
+});

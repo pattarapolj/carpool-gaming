@@ -1,17 +1,15 @@
-import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import type { z } from "zod";
 import type {
 	CreateGameSchema,
 	JoinGameSchema,
 } from "../../../../packages/contracts/src/index";
+import { type GameDb, hashToken, type QueryDb, type Session } from "./auth";
+
+export type { GameDb } from "./auth";
 
 type CreateGameInput = z.infer<typeof CreateGameSchema>;
 type JoinGameInput = z.infer<typeof JoinGameSchema>;
-
-export type GameDb = {
-	query(sql: string, values: unknown[]): Promise<unknown>;
-	end(): Promise<void>;
-};
 
 type QueryResult<Row> = { rows: Row[] };
 
@@ -29,6 +27,13 @@ type TeamRow = {
 	score: number;
 };
 
+type StartGameRow = {
+	id: string;
+	status: string;
+	startedAt: string;
+	nextRoundAt: string;
+};
+
 export class GameJoinError extends Error {
 	constructor(
 		readonly statusCode: 404 | 409,
@@ -40,6 +45,21 @@ export class GameJoinError extends Error {
 	}
 }
 
+export class GameStartError extends Error {
+	constructor(
+		readonly statusCode: 403 | 404 | 409 | 422,
+		readonly code:
+			| "FORBIDDEN"
+			| "GAME_NOT_FOUND"
+			| "GAME_ALREADY_STARTED"
+			| "GAME_NOT_READY",
+		message: string,
+	) {
+		super(message);
+		this.name = "GameStartError";
+	}
+}
+
 export async function createGame(input: CreateGameInput, db: GameDb) {
 	const game = {
 		id: randomUUID(),
@@ -48,7 +68,7 @@ export async function createGame(input: CreateGameInput, db: GameDb) {
 		joinCode: generateJoinCode(),
 	};
 	const hostToken = randomBytes(32).toString("hex");
-	const hostTokenHash = createHash("sha256").update(hostToken).digest("hex");
+	const hostTokenHash = hashToken(hostToken);
 
 	for (let attempt = 0; ; attempt++) {
 		try {
@@ -83,51 +103,51 @@ export async function joinGame(
 	input: JoinGameInput,
 	db: GameDb,
 ) {
-	const gameResult = (await db.query(
-		'SELECT id, name, join_code AS "joinCode", status FROM games WHERE join_code = $1',
-		[normalizeJoinCode(joinCode)],
-	)) as QueryResult<GameRow>;
-	const game = gameResult.rows[0];
-
-	if (!game) {
-		throw new GameJoinError(404, "GAME_NOT_FOUND", "Game not found");
-	}
-	if (game.status !== "LOBBY") {
-		throw new GameJoinError(
-			409,
-			"GAME_NOT_JOINABLE",
-			"Game is no longer accepting teams",
-		);
-	}
-
 	const teamId = randomUUID();
 	const captainToken = randomBytes(32).toString("hex");
-	const captainTokenHash = createHash("sha256")
-		.update(captainToken)
-		.digest("hex");
+	const captainTokenHash = hashToken(captainToken);
 
 	try {
-		const teamResult = (await db.query(
-			"INSERT INTO car_teams (id, game_id, name, captain_token_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, status, score",
-			[teamId, game.id, input.name, captainTokenHash],
-		)) as QueryResult<TeamRow>;
-		const team = teamResult.rows[0] ?? {
-			id: teamId,
-			name: input.name,
-			status: "ACTIVE",
-			score: 0,
-		};
+		return await withTransaction(db, async (transactionDb) => {
+			const gameResult = (await transactionDb.query(
+				'SELECT id, name, join_code AS "joinCode", status FROM games WHERE join_code = $1 FOR UPDATE',
+				[normalizeJoinCode(joinCode)],
+			)) as QueryResult<GameRow>;
+			const game = gameResult.rows[0];
 
-		return {
-			game: {
-				id: game.id,
-				name: game.name,
-				joinCode: game.joinCode,
-				status: game.status,
-			},
-			team,
-			captainToken,
-		};
+			if (!game) {
+				throw new GameJoinError(404, "GAME_NOT_FOUND", "Game not found");
+			}
+			if (game.status !== "LOBBY") {
+				throw new GameJoinError(
+					409,
+					"GAME_NOT_JOINABLE",
+					"Game is no longer accepting teams",
+				);
+			}
+
+			const teamResult = (await transactionDb.query(
+				"INSERT INTO car_teams (id, game_id, name, captain_token_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, status, score",
+				[teamId, game.id, input.name, captainTokenHash],
+			)) as QueryResult<TeamRow>;
+			const team = teamResult.rows[0] ?? {
+				id: teamId,
+				name: input.name,
+				status: "ACTIVE",
+				score: 0,
+			};
+
+			return {
+				game: {
+					id: game.id,
+					name: game.name,
+					joinCode: game.joinCode,
+					status: game.status,
+				},
+				team,
+				captainToken,
+			};
+		});
 	} catch (error) {
 		const dbError = error as { code?: string; constraint?: string };
 		if (
@@ -142,6 +162,91 @@ export async function joinGame(
 		}
 		throw error;
 	}
+}
+
+export async function startGame(
+	gameId: string,
+	practice: boolean,
+	session: Session,
+	db: GameDb,
+) {
+	return withTransaction(db, (transactionDb) =>
+		performStartGame(gameId, practice, session, transactionDb),
+	);
+}
+
+function withTransaction<Result>(
+	db: GameDb,
+	run: (transactionDb: QueryDb) => Promise<Result>,
+): Promise<Result> {
+	if (db.transaction) return db.transaction(run);
+
+	return (async () => {
+		await db.query("BEGIN", []);
+		try {
+			const result = await run(db);
+			await db.query("COMMIT", []);
+			return result;
+		} catch (error) {
+			await db.query("ROLLBACK", []);
+			throw error;
+		}
+	})();
+}
+
+async function performStartGame(
+	gameId: string,
+	practice: boolean,
+	session: Session,
+	db: QueryDb,
+) {
+	const gameResult = (await db.query(
+		`SELECT id, status
+		 FROM games
+		 WHERE id = $1
+		 FOR UPDATE`,
+		[gameId],
+	)) as QueryResult<{ id: string; status: string }>;
+	const game = gameResult.rows[0];
+
+	if (!game) {
+		throw new GameStartError(404, "GAME_NOT_FOUND", "Game not found");
+	}
+	if (session.gameId !== game.id || session.role !== "HOST") {
+		throw new GameStartError(403, "FORBIDDEN", "Host access required");
+	}
+	if (game.status !== "LOBBY") {
+		throw new GameStartError(
+			409,
+			"GAME_ALREADY_STARTED",
+			"Game has already started",
+		);
+	}
+
+	const teamsResult = (await db.query(
+		"SELECT COUNT(*) AS count FROM car_teams WHERE game_id = $1 AND status = 'ACTIVE'",
+		[gameId],
+	)) as QueryResult<{ count: string | number }>;
+	const activeTeamCount = Number(teamsResult.rows[0]?.count ?? 0);
+
+	if (activeTeamCount === 0 || (!practice && activeTeamCount < 2)) {
+		throw new GameStartError(
+			422,
+			"GAME_NOT_READY",
+			"Game needs at least two active teams unless practice mode is enabled",
+		);
+	}
+
+	const now = new Date();
+	const updatedGame = (await db.query(
+		`UPDATE games
+		 SET status = 'WAITING', started_at = $2, next_round_at = $2
+		 WHERE id = $1
+		 RETURNING id, status, started_at AS "startedAt", next_round_at AS "nextRoundAt"`,
+		[gameId, now],
+	)) as QueryResult<StartGameRow>;
+
+	return updatedGame.rows[0];
 }
 
 function normalizeJoinCode(joinCode: string) {
