@@ -6,7 +6,7 @@ export type QueryDb = {
 
 export type GameDb = QueryDb & {
 	end(): Promise<void>;
-	transaction?: <Result>(
+	transaction: <Result>(
 		run: (db: QueryDb) => Promise<Result>,
 	) => Promise<Result>;
 };

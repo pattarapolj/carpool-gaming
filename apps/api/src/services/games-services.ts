@@ -108,7 +108,7 @@ export async function joinGame(
 	const captainTokenHash = hashToken(captainToken);
 
 	try {
-		return await withTransaction(db, async (transactionDb) => {
+		return await db.transaction(async (transactionDb) => {
 			const gameResult = (await transactionDb.query(
 				'SELECT id, name, join_code AS "joinCode", status FROM games WHERE join_code = $1 FOR UPDATE',
 				[normalizeJoinCode(joinCode)],
@@ -170,28 +170,9 @@ export async function startGame(
 	session: Session,
 	db: GameDb,
 ) {
-	return withTransaction(db, (transactionDb) =>
+	return db.transaction((transactionDb) =>
 		performStartGame(gameId, practice, session, transactionDb),
 	);
-}
-
-function withTransaction<Result>(
-	db: GameDb,
-	run: (transactionDb: QueryDb) => Promise<Result>,
-): Promise<Result> {
-	if (db.transaction) return db.transaction(run);
-
-	return (async () => {
-		await db.query("BEGIN", []);
-		try {
-			const result = await run(db);
-			await db.query("COMMIT", []);
-			return result;
-		} catch (error) {
-			await db.query("ROLLBACK", []);
-			throw error;
-		}
-	})();
 }
 
 async function performStartGame(
@@ -200,6 +181,10 @@ async function performStartGame(
 	session: Session,
 	db: QueryDb,
 ) {
+	if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(gameId)) {
+		throw new GameStartError(404, "GAME_NOT_FOUND", "Game not found");
+	}
+
 	const gameResult = (await db.query(
 		`SELECT id, status
 		 FROM games

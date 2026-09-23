@@ -1,8 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { buildServer } from "../../src/server";
 import { type GameDb, startGame } from "../../src/services/games-services";
 
-const gameId = "game-1";
+const gameId = randomUUID();
 const hostToken = "host-token";
 
 describe("POST /v1/games/:gameId/start", () => {
@@ -250,6 +251,9 @@ function createStartApp(options: StartOptions = {}) {
 			throw new Error(`Unexpected query: ${sql}`);
 		},
 		end: async () => {},
+		transaction(run) {
+			return run(this);
+		},
 	});
 }
 
