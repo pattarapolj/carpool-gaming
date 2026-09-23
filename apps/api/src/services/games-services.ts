@@ -34,6 +34,23 @@ type StartGameRow = {
 	nextRoundAt: string;
 };
 
+type SnapshotGameRow = {
+	id: string;
+	name: string;
+	joinCode: string;
+	status: "LOBBY" | "WAITING" | "COMPLETE";
+	roundIntervalSeconds: number;
+	startedAt: Date | string | null;
+	nextRoundAt: Date | string | null;
+};
+
+type SnapshotTeamRow = {
+	id: string;
+	name: string;
+	status: "ACTIVE" | "LEFT";
+	score: number;
+};
+
 export class GameJoinError extends Error {
 	constructor(
 		readonly statusCode: 404 | 409,
@@ -57,6 +74,17 @@ export class GameStartError extends Error {
 	) {
 		super(message);
 		this.name = "GameStartError";
+	}
+}
+
+export class GameSnapshotError extends Error {
+	constructor(
+		readonly statusCode: 403 | 404,
+		readonly code: "FORBIDDEN" | "GAME_NOT_FOUND",
+		message: string,
+	) {
+		super(message);
+		this.name = "GameSnapshotError";
 	}
 }
 
@@ -181,7 +209,7 @@ async function performStartGame(
 	session: Session,
 	db: QueryDb,
 ) {
-	if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(gameId)) {
+	if (!isUuid(gameId)) {
 		throw new GameStartError(404, "GAME_NOT_FOUND", "Game not found");
 	}
 
@@ -232,6 +260,62 @@ async function performStartGame(
 	)) as QueryResult<StartGameRow>;
 
 	return updatedGame.rows[0];
+}
+
+export async function getGameSnapshot(
+	gameId: string,
+	session: Session,
+	db: GameDb,
+) {
+	if (!isUuid(gameId)) {
+		throw new GameSnapshotError(404, "GAME_NOT_FOUND", "Game not found");
+	}
+
+	const gameResult = (await db.query(
+		`SELECT id, name, join_code AS "joinCode", status,
+		        round_interval_seconds AS "roundIntervalSeconds",
+	        started_at AS "startedAt", next_round_at AS "nextRoundAt"
+		 FROM games
+		 WHERE id = $1`,
+		[gameId],
+	)) as QueryResult<SnapshotGameRow>;
+	const game = gameResult.rows[0];
+
+	if (!game) {
+		throw new GameSnapshotError(404, "GAME_NOT_FOUND", "Game not found");
+	}
+	if (session.gameId !== game.id) {
+		throw new GameSnapshotError(403, "FORBIDDEN", "Game access required");
+	}
+
+	const teamsResult = (await db.query(
+		`SELECT id, name, status, score
+		 FROM car_teams
+		 WHERE game_id = $1 AND status = 'ACTIVE'
+		 ORDER BY joined_at, id`,
+		[gameId],
+	)) as QueryResult<SnapshotTeamRow>;
+
+	return {
+		game: {
+			...game,
+			startedAt: toISOString(game.startedAt),
+			nextRoundAt: toISOString(game.nextRoundAt),
+		},
+		teams: teamsResult.rows,
+	};
+}
+
+function isUuid(value: string) {
+	return /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);
+}
+
+function toISOString(value: Date | string | null) {
+	return value === null
+		? null
+		: value instanceof Date
+			? value.toISOString()
+			: new Date(value).toISOString();
 }
 
 function normalizeJoinCode(joinCode: string) {

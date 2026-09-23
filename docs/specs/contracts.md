@@ -222,15 +222,20 @@ You can write tests for the settled rules while these decisions are discussed. S
 
 ```json
 {
-  "game": { "id": "…", "status": "WAITING", "nextRoundAt": "…" },
-  "teams": [{ "id": "…", "name": "Blue Sedan", "score": 1, "status": "ACTIVE" }],
-  "currentRound": null,
-  "myAnswer": null,
-  "leaderboard": []
+	"game": {
+		"id": "…",
+		"name": "Beach convoy",
+		"joinCode": "AB12CD",
+		"status": "LOBBY",
+		"roundIntervalSeconds": 300,
+		"startedAt": null,
+		"nextRoundAt": null
+	},
+	"teams": [{ "id": "…", "name": "Blue Sedan", "score": 0, "status": "ACTIVE" }]
 }
 ```
 
-An open current round exposes its status, ID, question type, prompt, choices, start and end times. It never contains the answer key or another team's answer. The full snapshot view schema and optional/null fields still need agreement before frontend integration; do not interpret the abbreviated example as a complete view definition.
+The lobby slice returns the game fields and active teams above so refresh restores the lobby and its join code. Round fields, the caller's answer and the leaderboard will be added with round delivery; an open round must never expose its answer key or another team's answer. This is not yet the complete in-game snapshot schema.
 
 **Acceptance:** a token from another game receives `403`; a reconnect returns the server’s actual phase; open-round JSON contains no `correctAnswer` text.
 

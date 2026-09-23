@@ -4,7 +4,7 @@
 
 ## 1. Current implementation versus target
 
-As of 2026-09-23, the API has a process entry point and build/start scripts. Docker Compose runs the API with PostgreSQL and applies the existing migrations when it initializes a new database volume. Snapshot, leave, round and realtime behavior, the browser app, and `.github/workflows/ci.yml` are still pending. The workflow below is a future template, not installed automation. Hosted branch settings have not been configured.
+As of 2026-09-24, the API has a process entry point and build/start scripts. Docker Compose runs the API with PostgreSQL and applies the existing migrations when it initializes a new database volume. The browser lobby and lobby snapshot are implemented; snapshot round data, leave, round and realtime behavior, and `.github/workflows/ci.yml` remain pending. The workflow below is a future template, not installed automation. Hosted branch settings have not been configured.
 
 Tests live in ordinary source files. CI runs those files on a clean machine after a push; writing a workflow does not create tests or prove unimplemented behavior.
 
