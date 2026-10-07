@@ -9,7 +9,9 @@ import {
 	createGame,
 	type GameDb,
 	GameJoinError,
+	GameSnapshotError,
 	GameStartError,
+	getGameSnapshot,
 	joinGame,
 	startGame,
 } from "../services/games-services";
@@ -115,6 +117,47 @@ export const registerGameRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 			return reply.code(200).send({ game: startedGame });
 		} catch (error) {
 			if (error instanceof GameStartError) {
+				return reply.code(error.statusCode).send({
+					error: {
+						code: error.code,
+						message: error.message,
+						requestId: request.id,
+					},
+				});
+			}
+			throw error;
+		}
+	});
+
+	app.get("/v1/games/:gameId/snapshot", async (request, reply) => {
+		const token = getBearerToken(request.headers.authorization);
+		if (!token) {
+			return reply.code(401).send({
+				error: {
+					code: "UNAUTHENTICATED",
+					message: "A valid bearer token is required",
+					requestId: request.id,
+				},
+			});
+		}
+
+		const session = await resolveSession(token, db);
+		if (!session) {
+			return reply.code(401).send({
+				error: {
+					code: "UNAUTHENTICATED",
+					message: "A valid bearer token is required",
+					requestId: request.id,
+				},
+			});
+		}
+
+		try {
+			const params = request.params as { gameId: string };
+			const snapshot = await getGameSnapshot(params.gameId, session, db);
+			return reply.code(200).send(snapshot);
+		} catch (error) {
+			if (error instanceof GameSnapshotError) {
 				return reply.code(error.statusCode).send({
 					error: {
 						code: error.code,

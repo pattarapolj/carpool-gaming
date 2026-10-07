@@ -2,8 +2,12 @@
 	"name": "carpool-gaming",
 	"private": true,
 	"scripts": {
+		"build": "pnpm --filter @carpool/api build && pnpm --filter @carpool/web build",
+		"dev": "pnpm --parallel --filter @carpool/api --filter @carpool/web dev",
+		"dev:web": "pnpm --filter @carpool/web dev",
 		"lint": "biome check .",
 		"lint:fix": "biome check --write .",
+		"start": "pnpm --filter @carpool/api start",
 		"test": "pnpm --recursive test",
 		"typecheck": "pnpm --recursive typecheck"
 	},
