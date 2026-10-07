@@ -47,9 +47,9 @@ Use `uuid` IDs, `timestamptz` timestamps, and `jsonb` for answer values and answ
 |---|---|---|
 | `games` | `id`, `name`, `join_code`, `host_token_hash`, `status`, `round_interval_seconds`, `question_window_seconds`, `started_at`, `next_round_at`, `created_at` | `join_code` is unique; status is `LOBBY`, `WAITING`, or `COMPLETE`. |
 | `car_teams` | `id`, `game_id`, `name`, `captain_token_hash`, `status`, `score`, `joined_at` | Unique index on `(game_id, lower(name))`; status is `ACTIVE` or `LEFT`. |
-| `questions` | `id`, `type`, `prompt`, `choices`, `correct_answer`, `explanation`, `is_active` | Server-only `correct_answer`; type is `MULTIPLE_CHOICE`, `TRUE_FALSE`, or `ESTIMATE`. |
+| `questions` | `id`, `type`, `prompt`, `choices`, `correct_answer`, `explanation`, `source_title`, `source_url`, `is_active` | Server-only answer key and source attribution; type is `MULTIPLE_CHOICE`, `TRUE_FALSE`, or `ESTIMATE`. |
 | `rounds` | `id`, `game_id`, `question_id`, `sequence`, `status`, `starts_at`, `ends_at`, `revealed_at`, `expected_team_count` | `UNIQUE(game_id, sequence)`; status is `OPEN` or `REVEALED`. |
-| `answers` | `id`, `round_id`, `car_team_id`, `value`, `submitted_at`, `is_correct`, `points_awarded` | `UNIQUE(round_id, car_team_id)` prevents duplicate answer rows; answer-update prevention is also required. |
+| `answers` | `id`, `game_id`, `round_id`, `car_team_id`, `value`, `submitted_at`, `is_correct`, `points_awarded` | `UNIQUE(round_id, car_team_id)` prevents duplicates; composite foreign keys enforce same-game round/team ownership. Submission identity, value and timestamp are immutable; nullable grading fields remain writable. |
 
 `expected_team_count` is captured when the round opens. It is compared with the count of answers to decide early reveal. A team that leaves during an open round cannot reduce this count. Eligibility to submit after leaving remains pending in the contract register; future rounds exclude left teams.
 

@@ -1,0 +1,221 @@
+import { randomUUID } from "node:crypto";
+import { readdir, readFile } from "node:fs/promises";
+import { PGlite } from "@electric-sql/pglite";
+import { afterAll, beforeAll, expect, it } from "vitest";
+
+let db: PGlite;
+const game = randomUUID();
+const otherGame = randomUUID();
+const team = randomUUID();
+const otherTeam = randomUUID();
+const round = randomUUID();
+const question = "10000000-0000-4000-8000-000000000001";
+
+beforeAll(async () => {
+	db = new PGlite();
+	const directory = new URL("../../migrations/", import.meta.url);
+	for (const file of (await readdir(directory))
+		.filter((name) => name.endsWith(".sql"))
+		.sort()) {
+		await db.exec(await readFile(new URL(file, directory), "utf8"));
+	}
+});
+
+afterAll(async () => {
+	if (db) await db.close();
+});
+
+it("loads three attributed sample questions with typed answer keys", async () => {
+	// Query first so RED demonstrates the missing schema, rather than a missing fixture file.
+	await db.query("SELECT id FROM questions");
+	await db.exec(
+		await readFile(
+			new URL("../../seeds/questions.sql", import.meta.url),
+			"utf8",
+		),
+	);
+	const { rows } = await db.query(
+		"SELECT type, choices, correct_answer, source_title, source_url, is_active FROM questions ORDER BY id",
+	);
+	expect(rows).toEqual([
+		{
+			type: "MULTIPLE_CHOICE",
+			choices: ["Earth", "Jupiter", "Neptune", "Saturn"],
+			correct_answer: "Jupiter",
+			source_title: "NASA: Jupiter Facts",
+			source_url: "https://science.nasa.gov/jupiter/jupiter-facts/",
+			is_active: true,
+		},
+		{
+			type: "TRUE_FALSE",
+			choices: null,
+			correct_answer: true,
+			source_title: "NASA: Sun Facts",
+			source_url: "https://science.nasa.gov/sun/facts/",
+			is_active: true,
+		},
+		{
+			type: "ESTIMATE",
+			choices: null,
+			correct_answer: 165,
+			source_title: "NASA: Neptune Facts",
+			source_url: "https://science.nasa.gov/neptune/neptune-facts/",
+			is_active: true,
+		},
+	]);
+});
+
+it("stores rounds and rejects duplicate game sequences", async () => {
+	for (const [id, code] of [
+		[game, "FIRST1"],
+		[otherGame, "OTHER2"],
+	]) {
+		await db.query(
+			"INSERT INTO games (id,name,join_code,host_token_hash,round_interval_seconds) VALUES ($1,'Trip',$2,$3,300)",
+			[id, code, "0".repeat(64)],
+		);
+	}
+	for (const [id, gameId] of [
+		[team, game],
+		[otherTeam, otherGame],
+	]) {
+		await db.query(
+			"INSERT INTO car_teams (id,game_id,name,captain_token_hash) VALUES ($1,$2,'Car',$3)",
+			[id, gameId, "1".repeat(64)],
+		);
+	}
+	await insertRound(round, game, 1);
+	await expect(insertRound(randomUUID(), game, 1)).rejects.toMatchObject({
+		code: "23505",
+		constraint: "rounds_game_sequence_key",
+	});
+	await insertRound(randomUUID(), otherGame, 1);
+});
+
+function insertRound(id: string, gameId: string, sequence: number) {
+	return db.query(
+		"INSERT INTO rounds (id,game_id,question_id,sequence,starts_at,ends_at,expected_team_count) VALUES ($1,$2,$3,$4,'2026-10-07T00:00:00Z','2026-10-07T00:01:00Z',1)",
+		[id, gameId, question, sequence],
+	);
+}
+
+function insertAnswer(
+	roundId = round,
+	gameId = game,
+	teamId = team,
+	value = '"Jupiter"',
+) {
+	return db.query(
+		"INSERT INTO answers (id,game_id,round_id,car_team_id,value,submitted_at) VALUES ($1,$2,$3,$4,$5,'2026-10-07T00:00:30Z')",
+		[randomUUID(), gameId, roundId, teamId, value],
+	);
+}
+
+it("preserves the original answer on duplicate submission and allows the next round", async () => {
+	await insertAnswer();
+	const original = (
+		await db.query("SELECT * FROM answers WHERE round_id = $1", [round])
+	).rows;
+	await expect(
+		insertAnswer(round, game, team, '"Saturn"'),
+	).rejects.toMatchObject({
+		code: "23505",
+		constraint: "answers_round_team_key",
+	});
+	expect(
+		(await db.query("SELECT * FROM answers WHERE round_id = $1", [round])).rows,
+	).toEqual(original);
+	const second = randomUUID();
+	await insertRound(second, game, 2);
+	await insertAnswer(second);
+});
+
+it("rejects answers whose round or car belongs to another game", async () => {
+	await expect(insertAnswer(round, game, otherTeam)).rejects.toMatchObject({
+		code: "23503",
+		constraint: "answers_team_game_fkey",
+	});
+	await expect(insertAnswer(round, otherGame, otherTeam)).rejects.toMatchObject(
+		{ code: "23503", constraint: "answers_round_game_fkey" },
+	);
+});
+
+it("prevents changes to submission identity, value and time while allowing grading", async () => {
+	for (const assignment of [
+		"id = gen_random_uuid()",
+		`game_id = '${otherGame}'`,
+		"round_id = gen_random_uuid()",
+		`car_team_id = '${otherTeam}'`,
+		`value = '"Saturn"'`,
+		"submitted_at = submitted_at + interval '1 second'",
+	]) {
+		await expect(
+			db.query(`UPDATE answers SET ${assignment} WHERE round_id = $1`, [round]),
+		).rejects.toMatchObject({ code: "23514" });
+	}
+	await db.query(
+		"UPDATE answers SET is_correct = true, points_awarded = 1 WHERE round_id = $1",
+		[round],
+	);
+	expect(
+		(
+			await db.query(
+				"SELECT value,is_correct,points_awarded FROM answers WHERE round_id = $1",
+				[round],
+			)
+		).rows,
+	).toEqual([{ value: "Jupiter", is_correct: true, points_awarded: 1 }]);
+	await db.query(
+		"UPDATE answers SET is_correct = NULL, points_awarded = NULL WHERE round_id = $1",
+		[round],
+	);
+});
+
+it("rejects invalid question types, answer-key shapes and missing attribution", async () => {
+	for (const assignment of [
+		"type = 'UNKNOWN'",
+		"correct_answer = 'null'",
+		"choices = '{}'",
+		"correct_answer = 'true'",
+		"source_title = ''",
+		"source_url = ''",
+	]) {
+		await expect(
+			db.query(`UPDATE questions SET ${assignment} WHERE id = $1`, [question]),
+		).rejects.toMatchObject({ code: "23514" });
+	}
+	await expect(
+		db.query(
+			"UPDATE questions SET correct_answer = '42' WHERE type = 'TRUE_FALSE'",
+		),
+	).rejects.toMatchObject({ code: "23514" });
+	await expect(
+		db.query(
+			"UPDATE questions SET correct_answer = 'true' WHERE type = 'ESTIMATE'",
+		),
+	).rejects.toMatchObject({ code: "23514" });
+});
+
+it("rejects invalid round state, timing, counts and point awards", async () => {
+	for (const assignment of [
+		"status = 'WAITING'",
+		"sequence = 0",
+		"expected_team_count = 0",
+		"ends_at = starts_at",
+		"status = 'REVEALED'",
+		"revealed_at = starts_at",
+	]) {
+		await expect(
+			db.query(`UPDATE rounds SET ${assignment} WHERE id = $1`, [round]),
+		).rejects.toMatchObject({ code: "23514" });
+	}
+	await expect(
+		db.query("UPDATE answers SET points_awarded = 2 WHERE round_id = $1", [
+			round,
+		]),
+	).rejects.toMatchObject({ code: "23514" });
+	await db.query(
+		"UPDATE rounds SET status = 'REVEALED', revealed_at = ends_at WHERE id = $1",
+		[round],
+	);
+});
