@@ -83,17 +83,13 @@ a:focus-visible {
 }
 
 .brand {
-	gap: 11px;
-	color: var(--ink);
-	font-family: var(--display);
-	font-size: 12px;
-	font-weight: 800;
-	letter-spacing: 0.11em;
 	text-decoration: none;
 }
 
 .brand img {
-	border-radius: 12px;
+	display: block;
+	width: 240px;
+	height: auto;
 }
 
 .topbar-note,
@@ -678,9 +674,7 @@ h2 {
 	}
 
 	.topbar-note {
-		max-width: 120px;
-		font-size: 8px;
-		text-align: right;
+		display: none;
 	}
 
 	.welcome-layout {

@@ -1,9 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-	<title>Carpool Quiz League</title>
-	<rect width="128" height="128" rx="28" fill="#164a3d" />
-	<path d="M24 72h80l-8-24a12 12 0 0 0-11-8H45a12 12 0 0 0-11 8l-10 24Z" fill="#f6f1e7" />
-	<path d="M19 75a7 7 0 0 1 7-7h76a7 7 0 0 1 7 7v15H19V75Z" fill="#e6a746" />
-	<circle cx="39" cy="91" r="9" fill="#17332d" />
-	<circle cx="89" cy="91" r="9" fill="#17332d" />
-	<path d="M46 53h36" stroke="#164a3d" stroke-linecap="round" stroke-width="6" />
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img"><title>Carpool Quiz League</title><path fill="#164a3d" d="M56 44H88A24 24 0 0 1 112 68V140A24 24 0 0 1 88 164H72L32 204V68A24 24 0 0 1 56 44Z M168 44H200A24 24 0 0 1 224 68V204L184 164H168A24 24 0 0 1 144 140V68A24 24 0 0 1 168 44Z"/></svg>

@@ -316,8 +316,7 @@ function Brand() {
 	return (
 		<header className="topbar">
 			<a className="brand" href="/" aria-label="Carpool Quiz League home">
-				<img alt="" height="38" src="/carpool.svg" width="38" />
-				<span>CARPOOL QUIZ LEAGUE</span>
+				<img alt="" height="72" src="/brand/horizontal.svg" width="240" />
 			</a>
 			<span className="topbar-note">PASSENGER-POWERED PLAY</span>
 		</header>
