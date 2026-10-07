@@ -9,13 +9,24 @@ describe("starting a game with PostgreSQL semantics", () => {
 
 	beforeAll(async () => {
 		db = new PGlite();
-		for (const migrationName of ["001_games.sql", "002_car_teams.sql"]) {
+		for (const migrationName of [
+			"001_games.sql",
+			"002_car_teams.sql",
+			"003_round_storage.sql",
+			"004_round_participants.sql",
+		]) {
 			const migration = await readFile(
 				new URL(`../../migrations/${migrationName}`, import.meta.url),
 				"utf8",
 			);
 			await db.exec(migration);
 		}
+		await db.exec(
+			await readFile(
+				new URL("../../seeds/questions.sql", import.meta.url),
+				"utf8",
+			),
+		);
 		app = buildServer({
 			query: (sql, values) => db.query(sql, values),
 			end: () => db.close(),
@@ -66,7 +77,18 @@ describe("starting a game with PostgreSQL semantics", () => {
 		]);
 		expect(result.rows[0].status).toBe("WAITING");
 		expect(result.rows[0].started_at).not.toBeNull();
-		expect(result.rows[0].started_at).toEqual(result.rows[0].next_round_at);
+		expect(
+			new Date(result.rows[0].next_round_at ?? "").getTime() -
+				new Date(result.rows[0].started_at ?? "").getTime(),
+		).toBe(300000);
+		expect(new Date(response.json().game.nextRoundAt).getTime()).toBe(
+			new Date(result.rows[0].next_round_at ?? "").getTime(),
+		);
+		const rounds = await db.query(
+			"SELECT sequence,status FROM rounds WHERE game_id=$1",
+			[created.game.id],
+		);
+		expect(rounds.rows).toEqual([{ sequence: 1, status: "OPEN" }]);
 	});
 
 	it("rolls back readiness failures and leaves the game in the lobby", async () => {

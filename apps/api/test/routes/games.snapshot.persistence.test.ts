@@ -10,7 +10,12 @@ describe("GET /v1/games/:gameId/snapshot", () => {
 
 	beforeAll(async () => {
 		db = new PGlite();
-		for (const migrationName of ["001_games.sql", "002_car_teams.sql"]) {
+		for (const migrationName of [
+			"001_games.sql",
+			"002_car_teams.sql",
+			"003_round_storage.sql",
+			"004_round_participants.sql",
+		]) {
 			const migration = await readFile(
 				new URL(`../../migrations/${migrationName}`, import.meta.url),
 				"utf8",

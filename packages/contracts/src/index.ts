@@ -67,29 +67,102 @@ export const JoinGameResponseSchema = z.object({
 	captainToken: z.string().min(1),
 });
 
-export const GameSnapshotSchema = z.object({
-	game: z.object({
-		id: z.string().uuid(),
-		name: z.string(),
-		joinCode: z.string().length(6),
-		status: z.enum(["LOBBY", "WAITING", "COMPLETE"]),
-		roundIntervalSeconds: z.union([
-			z.literal(300),
-			z.literal(600),
-			z.literal(900),
-		]),
-		startedAt: z.string().datetime().nullable(),
-		nextRoundAt: z.string().datetime().nullable(),
-	}),
-	teams: z.array(
+const AnswerValueSchema = z.union([
+	z.string(),
+	z.boolean(),
+	z.number().finite(),
+]);
+const SnapshotTeamSchema = z.object({
+	id: z.string().uuid(),
+	name: z.string(),
+	status: z.enum(["ACTIVE", "LEFT"]),
+	score: z.number().int(),
+});
+export const LeaderboardSchema = z.array(
+	SnapshotTeamSchema.extend({ rank: z.number().int().positive() }),
+);
+export const RoundResultsSchema = z
+	.array(
 		z.object({
+			teamId: z.string().uuid(),
+			name: z.string(),
+			value: AnswerValueSchema.nullable(),
+			isCorrect: z.boolean(),
+			pointsAwarded: z.union([z.literal(0), z.literal(1)]),
+		}),
+	)
+	.nullable();
+export type RoundResult = NonNullable<
+	z.infer<typeof RoundResultsSchema>
+>[number];
+const PublicRoundSchema = z.object({
+	id: z.string().uuid(),
+	sequence: z.number().int().positive(),
+	startsAt: z.string().datetime(),
+	endsAt: z.string().datetime(),
+	question: z
+		.object({
+			id: z.string().uuid(),
+			type: z.enum(["MULTIPLE_CHOICE", "TRUE_FALSE", "ESTIMATE"]),
+			prompt: z.string(),
+			choices: z.array(z.string()).nullable(),
+		})
+		.strict()
+		.refine(
+			(question) =>
+				question.type === "MULTIPLE_CHOICE"
+					? question.choices !== null && question.choices.length >= 2
+					: question.choices === null,
+			"Choices must match the question type",
+		),
+});
+export const SnapshotRoundSchema = z.discriminatedUnion("status", [
+	PublicRoundSchema.extend({ status: z.literal("OPEN") }).strict(),
+	PublicRoundSchema.extend({
+		status: z.literal("REVEALED"),
+		revealedAt: z.string().datetime(),
+		correctAnswer: AnswerValueSchema,
+		explanation: z.string(),
+		results: RoundResultsSchema,
+	}).strict(),
+]);
+export const GameSnapshotSchema = z
+	.object({
+		game: z.object({
 			id: z.string().uuid(),
 			name: z.string(),
-			status: z.literal("ACTIVE"),
-			score: z.number().int(),
+			joinCode: z.string().length(6),
+			status: z.enum(["LOBBY", "WAITING", "COMPLETE"]),
+			roundIntervalSeconds: z.union([
+				z.literal(300),
+				z.literal(600),
+				z.literal(900),
+			]),
+			startedAt: z.string().datetime().nullable(),
+			nextRoundAt: z.string().datetime().nullable(),
 		}),
-	),
-});
+		teams: z.array(
+			z.object({
+				id: z.string().uuid(),
+				name: z.string(),
+				status: z.literal("ACTIVE"),
+				score: z.number().int(),
+			}),
+		),
+		round: SnapshotRoundSchema.nullable(),
+		ownAnswer: z
+			.object({
+				answerId: z.string().uuid(),
+				value: AnswerValueSchema,
+				submittedAt: z.string().datetime(),
+			})
+			.strict()
+			.nullable(),
+		callerTeam: SnapshotTeamSchema.nullable(),
+		leaderboard: LeaderboardSchema,
+		serverTime: z.string().datetime(),
+	})
+	.strict();
 
 export type GameSnapshot = z.infer<typeof GameSnapshotSchema>;
 export type CreatedGame = z.infer<typeof CreateGameResponseSchema>;

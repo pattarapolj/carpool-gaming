@@ -1,14 +1,39 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, {
+	type FastifyInstance,
+	type FastifyServerOptions,
+} from "fastify";
 import { Pool, type PoolConfig } from "pg";
+import { tick } from "./coordinator";
 import { registerGameRoutes } from "./routes/games";
 import type { GameDb } from "./services/games-services";
 
-export function buildServer(db: GameDb = createPostgresDb()): FastifyInstance {
-	const app = Fastify();
+export function buildServer(
+	db: GameDb = createPostgresDb(),
+	options: FastifyServerOptions = {},
+): FastifyInstance {
+	const app = Fastify(options);
+	let timer: ReturnType<typeof setInterval> | undefined;
+	let running: Promise<void> | undefined;
+	app.addHook("onListen", async () => {
+		timer = setInterval(() => {
+			if (running) return;
+			running = tick(db)
+				.catch((error: unknown) => {
+					app.log.error(error, "Round coordinator tick failed");
+				})
+				.finally(() => {
+					running = undefined;
+				});
+		}, 1000);
+	});
 
 	app.get("/health", () => ({ ok: true }));
 	app.register(registerGameRoutes, { db });
-	app.addHook("onClose", () => db.end());
+	app.addHook("onClose", async () => {
+		clearInterval(timer);
+		await running;
+		await db.end();
+	});
 
 	return app;
 }
