@@ -76,6 +76,8 @@ pnpm --filter @carpool/api test test/routes/games.create.test.ts -t "creates a g
 
 ## Documentation
 
+The web app uses the approved Shared Answer logo in its header, browser tabs and install icons. See the [brand asset guide](docs/branding.md) for reusable SVGs and usage notes.
+
 1. [Product requirements](docs/specs/product.md)
 2. [High-level design](docs/specs/design.md)
 3. [Low-level design](docs/specs/lld.md)

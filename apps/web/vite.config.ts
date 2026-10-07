@@ -7,6 +7,12 @@ export default defineConfig({
 		react(),
 		VitePWA({
 			registerType: "autoUpdate",
+			includeAssets: [
+				"favicon.ico",
+				"favicon.svg",
+				"apple-touch-icon.png",
+				"brand/horizontal.svg",
+			],
 			manifest: {
 				name: "Carpool Quiz League",
 				short_name: "Carpool Quiz",
@@ -17,9 +23,20 @@ export default defineConfig({
 				theme_color: "#f6f1e7",
 				icons: [
 					{
-						src: "/carpool.svg",
-						sizes: "any",
-						type: "image/svg+xml",
+						src: "/icon-192.png",
+						sizes: "192x192",
+						type: "image/png",
+					},
+					{
+						src: "/icon-512.png",
+						sizes: "512x512",
+						type: "image/png",
+					},
+					{
+						src: "/maskable-512.png",
+						sizes: "512x512",
+						type: "image/png",
+						purpose: "maskable",
 					},
 				],
 			},
