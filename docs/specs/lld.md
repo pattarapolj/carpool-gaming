@@ -8,7 +8,7 @@
 
 ### Decisions to settle before implementation
 
-The [contract decision register](contracts.md#10-decisions-to-settle-before-implementation) owns unresolved behavior, including leave, reconnect, retries, completion and restart. Do not implement a conflicting rule as though it were settled.
+The [contract decision register](contracts.md#10-decisions-to-settle-before-implementation) owns unresolved behavior, including reconnect and completion. Leave, duplicate rejection, protected scoring and missed-slot recovery are settled below.
 
 ## 1. Purpose and boundaries
 
@@ -48,10 +48,10 @@ Use `uuid` IDs, `timestamptz` timestamps, and `jsonb` for answer values and answ
 | `games` | `id`, `name`, `join_code`, `host_token_hash`, `status`, `round_interval_seconds`, `question_window_seconds`, `started_at`, `next_round_at`, `created_at` | `join_code` is unique; status is `LOBBY`, `WAITING`, or `COMPLETE`. |
 | `car_teams` | `id`, `game_id`, `name`, `captain_token_hash`, `status`, `score`, `joined_at` | Unique index on `(game_id, lower(name))`; status is `ACTIVE` or `LEFT`. |
 | `questions` | `id`, `type`, `prompt`, `choices`, `correct_answer`, `explanation`, `source_title`, `source_url`, `is_active` | Server-only answer key and source attribution; type is `MULTIPLE_CHOICE`, `TRUE_FALSE`, or `ESTIMATE`. |
-| `rounds` | `id`, `game_id`, `question_id`, `sequence`, `status`, `starts_at`, `ends_at`, `revealed_at`, `expected_team_count` | `UNIQUE(game_id, sequence)`; status is `OPEN` or `REVEALED`. |
+| `rounds` | `id`, `game_id`, `question_id`, `sequence`, `status`, `starts_at`, `ends_at`, `revealed_at`, `expected_team_count`, `expected_team_ids` | `UNIQUE(game_id, sequence)`; status is `OPEN` or `REVEALED`. Captured UUID array cardinality equals the expected count; legacy rows may have a NULL, unknown roster. |
 | `answers` | `id`, `game_id`, `round_id`, `car_team_id`, `value`, `submitted_at`, `is_correct`, `points_awarded` | `UNIQUE(round_id, car_team_id)` prevents duplicates; composite foreign keys enforce same-game round/team ownership. Submission identity, value and timestamp are immutable; nullable grading fields remain writable. |
 
-`expected_team_count` is captured when the round opens. It is compared with the count of answers to decide early reveal. A team that leaves during an open round cannot reduce this count. Eligibility to submit after leaving remains pending in the contract register; future rounds exclude left teams.
+`expected_team_count` and `expected_team_ids` are captured from the same active teams when the round opens. Leaving immediately prevents further submissions, retains any already locked answer, and cannot reduce this count. Future rounds exclude left teams. The captured IDs let reveal include unanswered teams even after they leave. Migration 004 preserves legacy rounds without inventing historical participants: their IDs stay NULL, and internal reveal results are NULL rather than an invented roster. New engine-created rounds always capture the IDs.
 
 The editable ERD is [carpool-quiz-league-erd.mmd](diagrams/carpool-quiz-league-erd.mmd); the PNG export is [carpool-quiz-league-erd.png](diagrams/carpool-quiz-league-erd.png).
 
@@ -74,10 +74,10 @@ The diagram combines game state (`LOBBY`, `WAITING`, `COMPLETE`) with current-ro
 
 1. `POST /start` sets `started_at` and `next_round_at` to the current server time.
 2. The coordinator opens round 1 immediately because `now >= next_round_at`.
-3. On opening sequence `n`, set the following `next_round_at` to `started_at + (n * round_interval_seconds)`.
+3. After missed schedule slots, open only one fresh round at server now. Sequence counts delivered rounds; the next scheduled time is the first anchored boundary strictly after now: `started_at + (floor((now - started_at) / interval) + 1) * interval`. This intentionally refines the original sequence-based formula, which only held when no slots were missed.
 4. Set `ends_at` to `starts_at + question_window_seconds` (60 seconds by default).
 5. An early reveal does **not** move the next scheduled round earlier.
-6. A coordinator tick runs every second and also runs after a successful answer submission.
+6. The answer transaction checks reveal after inserting an answer. The forthcoming coordinator will call the exported opening/reveal transitions every second; the loop is not delivered in Task 6a. No active teams or no unused active questions is a safe no-op pending completion policy.
 
 ### Scoring rules
 
@@ -139,7 +139,7 @@ Use the existing planned `game-service.ts` module. Database pool and clock acces
 | `joinGame` | Normalized join code and validated team name. | Persist an active team and captain-token hash; return game, team and raw captain token. | Unknown game, closed lobby, duplicate normalized name. Check/insert must not race a start; capacity handling needs the PR-12 decision. |
 | `startGame` | Authenticated host identity, game ID, validated practice option and server time. | Persist start time and first eligible round time; return started game view. | Only owning host; sufficient active teams; game still in lobby. Concurrent starts must not start twice. |
 | `getGameSnapshot` | Authenticated identity and game ID. | Return authorized game/team/round/own-answer/leaderboard view; no mutation. | Unknown/other game; no raw tokens, hashes, open answer key or another team's locked values. Exact complete view schema must be agreed before client work. |
-| `leaveGame` | Authenticated captain identity and game ID. | Mark only that team left; repeated leave succeeds per contract; retain open-round expected count. | Wrong role/game, completed game; current-round answer eligibility is pending. |
+| `leaveGame` | Authenticated captain identity and game ID. | Mark only that team left immediately; repeated leave succeeds per contract; retain open-round expected count and locked answers. | Wrong role/game, completed game. |
 
 In `auth.ts`, plan **`resolveSession`**: supplied bearer credential → host/captain identity and game/team ownership, or authentication failure. Hash lookup must not trust a body field. Keep token generation/hashing inside this module; use the cryptographic primitive specified in contracts. Session lifetime/expiry remains a decision, so do not promise an unimplemented expiry policy. Database access failures must not be silently treated as invalid credentials.
 
@@ -149,15 +149,15 @@ In `auth.ts`, plan **`resolveSession`**: supplied bearer credential → host/cap
 
 | Proposed function / module | Inputs | Result / state change | Failures and constraints |
 |---|---|---|---|
-| `scoreAnswers` in `round-service.ts` | Question type/key, submitted answers and expected participants. | Pure result: awarded points and results for each expected team; no database writes or broadcasts. | Input is already validated; unanswered teams get zero; all closest ties win. Work expected examples independently. |
-| `openDueRound` in `round-service.ts` | Game ID and server time; database. | If eligible, save one question, round times and expected participants; advance fixed next-round schedule. | Not due/already opened is a safe no-op; concurrent callers must not create duplicate sequence. Question exhaustion/restart semantics pending. |
-| `lockAnswer` in `round-service.ts` | Authenticated captain, round ID, validated answer and server time. | Persist one immutable answer and return locked confirmation/deadline. | Wrong role/game, invalid choice/type, expired/revealed round, duplicate. Leave/retry conflicts must be settled first. |
-| `revealDueRound` in `round-service.ts` | Round ID and server time; database. | On all expected answers or expiry, apply scoring and reveal as one protected transition; otherwise no-op. | Concurrent callers cannot apply points twice. Failed transaction produces no successful reveal; do not move next-round time on early reveal. |
+| Private scoring inside `round-service.ts` | Stored question key and validated submissions. | PostgreSQL numeric distance calculation, answer grades and cumulative team scores in the reveal transaction. | Unanswered teams get zero; all closest ties win; numeric arithmetic avoids overflow for finite JSON estimates. |
+| `openDueRound` in `round-service.ts` | Game ID, database, optional server clock function. | Save one public question, full window and participant IDs; return committed public round and next time, or NULL. | Game lock prevents duplicate openings. Skip missed slots; exhausted bank/no active teams is a no-op pending completion. |
+| `lockAnswer` in `round-service.ts` | Round ID, validated answer, authenticated session, database, optional server clock function. | Persist one immutable answer; return `{ answer, reveal }` after commit. HTTP sends only the locked answer confirmation. | Wrong role/game, LEFT, invalid choice/type, expired/revealed round, duplicate. Internal reveal is NULL unless this transaction reveals. |
+| `revealDueRound` in `round-service.ts` | Round ID, database, optional server clock function. | On all expected answers or expiry, return committed answer, explanation, participant results, leaderboard and fixed next time; otherwise NULL. | Concurrent callers cannot apply points twice. Failed transaction returns no committed result; early reveal never moves the schedule. |
 | `tick` in `coordinator.ts` | Explicit server time and database/event dependencies. | Find due work and invoke round transitions, then publish committed changes. | Repeat/overlap safely. Recovery after downtime and failed event delivery need explicit design decisions. |
 
-`openDueRound` and `revealDueRound` may stay internal if `tick` is their only meaningful caller. Test through `tick` and observable state in that case. Do not expose a helper just to make a test import possible.
+`openDueRound` and `revealDueRound` are the exported transition interface for the upcoming coordinator. Their results are internal service values, not finalized event/snapshot schemas. No transition publishes events in Task 6a.
 
-One Node process can interleave asynchronous requests. Coordinate start/join, answer/reveal and overlapping ticks through database-protected transitions, not an assumption that “single process” means “no concurrency.” The exact locking strategy belongs in the feature implementation/design review; the required outcomes belong in contracts and tests.
+One Node process can interleave asynchronous requests. All opening, answer, reveal and leave transitions acquire `games FOR UPDATE` first, then round/team locks where needed. Start and join already use that game lock. Answer checks time after acquiring its locks; opening samples time after locking the active roster. Scoring, grades and reveal commit together, including the triggering final answer. Tests supply a clock function; request payloads cannot supply time. PGlite proves persistence/rollback and serialized contenders, but independent PostgreSQL connections still need verification.
 
 ### Live delivery and browser modules
 

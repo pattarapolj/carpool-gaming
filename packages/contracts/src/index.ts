@@ -1,5 +1,23 @@
 import { z } from "zod";
 
+export const SubmitAnswerSchema = z.object({
+	value: z.union([z.string(), z.boolean(), z.number().finite()]),
+});
+
+export const SubmitAnswerResponseSchema = z.object({
+	answerId: z.string().uuid(),
+	status: z.literal("locked"),
+	roundEndsAt: z.string().datetime(),
+});
+
+export const LeaveGameSchema = z.object({});
+export const LeaveGameResponseSchema = z.object({
+	team: z.object({ id: z.string().uuid(), status: z.literal("LEFT") }),
+});
+export type SubmittedAnswer = z.infer<typeof SubmitAnswerResponseSchema>;
+export type SubmitAnswerInput = z.infer<typeof SubmitAnswerSchema>;
+export type LeftGame = z.infer<typeof LeaveGameResponseSchema>;
+
 export const CreateGameSchema = z.object({
 	name: z.string().trim().min(1).max(60),
 	roundIntervalSeconds: z.union([
