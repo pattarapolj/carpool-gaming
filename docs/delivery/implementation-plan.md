@@ -4,7 +4,7 @@
 
 **Goal:** Deliver the Carpool Quiz League MVP in small, reviewable changes.
 
-**Progress note (2026-09-24):** Foundation is still partial: the API process/build commands, Docker Compose API/PostgreSQL stack, and React PWA lobby now exist; CI does not. Create, join, start, and lobby snapshot behavior are implemented. Full round snapshots, leave, rounds, realtime, and gameplay screens remain pending. The ten milestones are not marked complete. See [README](../../README.md) for the last observed check results and [CONTRIBUTING](../../CONTRIBUTING.md) for the branch workflow.
+**Progress note (2026-10-08):** Foundation is still partial pending hosted verification: workspace/process/build commands, Docker Compose API/PostgreSQL, the PWA lobby and `.github/workflows/ci.yml` are installed. Local PostgreSQL 16.14 checks establish independent-connection answer/open/reveal locking, post-wait deadlines and scoring rollback. Create, join, start, lobby snapshot, answer/leave routes and server round transitions are implemented. Full round snapshots, the coordinator, realtime delivery, gameplay screens and completion/capacity behavior remain pending. Hosted CI results and merge protection have not been verified; the ten milestones are not marked complete. See [README](../../README.md) for observed evidence and [CONTRIBUTING](../../CONTRIBUTING.md) for the branch workflow.
 
 The tasks are milestones, not mandatory PR sizes. Deliver one reviewable behavior per PR; a large milestone can take several PRs. Write tests for the next behavior and implement it before expanding to the next. Use the contract decision register before committing to an ambiguous contract.
 

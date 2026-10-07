@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: carpool_test
+          POSTGRES_USER: carpool_test
+          POSTGRES_PASSWORD: carpool-test-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U carpool_test -d carpool_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm --filter @carpool/api test:postgres
+        env:
+          TEST_DATABASE_URL: postgres://carpool_test:carpool-test-only@localhost:5432/carpool_test
