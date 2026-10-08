@@ -6,6 +6,7 @@ import {
 	LeaveGameSchema,
 	StartGameSchema,
 } from "../../../../packages/contracts/src/index";
+import type { LivePublisher } from "../live";
 import { getBearerToken, resolveSession } from "../services/auth";
 import {
 	createGame,
@@ -15,16 +16,20 @@ import {
 	GameStartError,
 	getGameSnapshot,
 	joinGame,
-	startGame,
+	startGameTransition,
 } from "../services/games-services";
-import { endGame, leaveGame, RoundError } from "../services/round-service";
+import {
+	endGameTransition,
+	leaveGameTransition,
+	RoundError,
+} from "../services/round-service";
 import { registerRoundRoutes } from "./rounds";
 
-export const registerGameRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
-	app,
-	{ db },
-) => {
-	app.register(registerRoundRoutes, { db });
+export const registerGameRoutes: FastifyPluginAsync<{
+	db: GameDb;
+	live: LivePublisher;
+}> = async (app, { db, live }) => {
+	app.register(registerRoundRoutes, { db, live });
 	app.post<{ Params: { gameId: string } }>(
 		"/v1/games/:gameId/end",
 		async (request) => {
@@ -41,7 +46,9 @@ export const registerGameRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 					.success
 			)
 				throw new RoundError(422, "VALIDATION_ERROR", "Invalid end request");
-			return endGame(request.params.gameId, session, db);
+			const ended = await endGameTransition(request.params.gameId, session, db);
+			live.publishTransition(ended);
+			return ended.response;
 		},
 	);
 	app.post<{ Params: { gameId: string } }>(
@@ -61,7 +68,13 @@ export const registerGameRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 				).success
 			)
 				throw new RoundError(422, "VALIDATION_ERROR", "Invalid leave request");
-			return leaveGame(request.params.gameId, session, db);
+			const left = await leaveGameTransition(
+				request.params.gameId,
+				session,
+				db,
+			);
+			if (left.changed) await live.publishUpdated(session);
+			return left.response;
 		},
 	);
 	app.post("/v1/games", async (request, reply) => {
@@ -99,6 +112,11 @@ export const registerGameRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 		try {
 			const params = request.params as { joinCode: string };
 			const joinedGame = await joinGame(params.joinCode, parsedBody.data, db);
+			await live.publishUpdated({
+				gameId: joinedGame.game.id,
+				role: "CAPTAIN",
+				teamId: joinedGame.team.id,
+			});
 			return reply.code(201).send(joinedGame);
 		} catch (error) {
 			if (error instanceof GameJoinError) {
@@ -152,13 +170,15 @@ export const registerGameRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 
 		try {
 			const params = request.params as { gameId: string };
-			const startedGame = await startGame(
+			const started = await startGameTransition(
 				params.gameId,
 				parsedBody.data.practice,
 				session,
 				db,
 			);
-			return reply.code(200).send({ game: startedGame });
+			live.publishTransition(started);
+			await live.publishUpdated(session);
+			return reply.code(200).send({ game: started.game });
 		} catch (error) {
 			if (error instanceof GameStartError) {
 				return reply.code(error.statusCode).send({

@@ -10,7 +10,7 @@ import { type GameDb, hashToken, type QueryDb, type Session } from "./auth";
 import {
 	getLeaderboard,
 	getRoundResults,
-	openDueRoundInTransaction,
+	openGameInTransaction,
 } from "./round-service";
 
 export type { GameDb } from "./auth";
@@ -225,6 +225,15 @@ export async function startGame(
 	session: Session,
 	db: GameDb,
 ) {
+	return (await startGameTransition(gameId, practice, session, db)).game;
+}
+
+export async function startGameTransition(
+	gameId: string,
+	practice: boolean,
+	session: Session,
+	db: GameDb,
+) {
 	return db.transaction((transactionDb) =>
 		performStartGame(gameId, practice, session, transactionDb),
 	);
@@ -285,16 +294,21 @@ async function performStartGame(
 		 RETURNING id, status, started_at AS "startedAt", next_round_at AS "nextRoundAt"`,
 		[gameId, now],
 	);
-	await openDueRoundInTransaction(gameId, db, () => now);
+	const transition = await openGameInTransaction(gameId, db, () => now);
 	const committed = (await db.query(
 		'SELECT id,status,started_at AS "startedAt",next_round_at AS "nextRoundAt" FROM games WHERE id=$1',
 		[gameId],
 	)) as QueryResult<StartGameRow>;
 	const started = committed.rows[0];
 	return {
-		...started,
-		startedAt: new Date(started.startedAt).toISOString(),
-		nextRoundAt: toISOString(started.nextRoundAt),
+		game: {
+			...started,
+			startedAt: new Date(started.startedAt).toISOString(),
+			nextRoundAt: toISOString(started.nextRoundAt),
+		},
+		gameId,
+		...transition,
+		reveal: null,
 	};
 }
 

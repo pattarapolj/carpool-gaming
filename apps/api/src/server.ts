@@ -4,6 +4,7 @@ import Fastify, {
 } from "fastify";
 import { Pool, type PoolConfig } from "pg";
 import { tick } from "./coordinator";
+import { createLiveServer } from "./live";
 import { registerGameRoutes } from "./routes/games";
 import type { GameDb } from "./services/games-services";
 
@@ -12,12 +13,13 @@ export function buildServer(
 	options: FastifyServerOptions = {},
 ): FastifyInstance {
 	const app = Fastify(options);
+	const live = createLiveServer(app, db);
 	let timer: ReturnType<typeof setInterval> | undefined;
 	let running: Promise<unknown> | undefined;
 	app.addHook("onListen", async () => {
 		timer = setInterval(() => {
 			if (running) return;
-			running = tick(db)
+			running = tick(db, undefined, live.publishTransition)
 				.catch((error: unknown) => {
 					app.log.error(error, "Round coordinator tick failed");
 				})
@@ -28,10 +30,12 @@ export function buildServer(
 	});
 
 	app.get("/health", () => ({ ok: true }));
-	app.register(registerGameRoutes, { db });
-	app.addHook("onClose", async () => {
+	app.register(registerGameRoutes, { db, live });
+	app.addHook("preClose", async () => {
 		clearInterval(timer);
-		await running;
+		await Promise.all([running, live.close()]);
+	});
+	app.addHook("onClose", async () => {
 		await db.end();
 	});
 
