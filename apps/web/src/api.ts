@@ -3,15 +3,20 @@ import {
 	type CreateGameInput,
 	CreateGameResponseSchema,
 	CreateGameSchema,
+	EndGameResponseSchema,
 	type GameSnapshot,
 	GameSnapshotSchema,
 	type JoinedGame,
 	type JoinGameInput,
 	JoinGameResponseSchema,
 	JoinGameSchema,
+	LeaveGameResponseSchema,
 	type StartedGame,
 	StartGameResponseSchema,
 	StartGameSchema,
+	type SubmitAnswerInput,
+	SubmitAnswerResponseSchema,
+	SubmitAnswerSchema,
 } from "@carpool/contracts";
 import type { GameSession } from "./session";
 
@@ -73,7 +78,11 @@ async function request<T>(
 	if (init.body) headers.set("content-type", "application/json");
 	let response: Response;
 	try {
-		response = await fetch(path, { ...init, headers });
+		response = await fetch(path, {
+			...init,
+			headers,
+			signal: init.signal ?? AbortSignal.timeout(10000),
+		});
 	} catch {
 		throw new Error(
 			"Can't reach the game service. Check your connection and try again.",
@@ -86,14 +95,16 @@ async function request<T>(
 		throw new Error("The game service returned an invalid response.");
 	}
 	if (!response.ok) {
-		const message =
+		const error =
 			typeof value === "object" && value !== null && "error" in value
-				? (value.error as { message?: unknown }).message
+				? (value.error as { message?: unknown; code?: unknown })
 				: undefined;
-		throw new Error(
-			typeof message === "string"
-				? message
+		throw new ApiError(
+			typeof error?.message === "string"
+				? error.message
 				: "The game service could not complete that request.",
+			response.status,
+			typeof error?.code === "string" ? error.code : null,
 		);
 	}
 
@@ -102,4 +113,56 @@ async function request<T>(
 	} catch {
 		throw new Error("The game service returned an invalid response.");
 	}
+}
+
+export class ApiError extends Error {
+	constructor(
+		message: string,
+		public readonly status: number,
+		public readonly code: string | null,
+	) {
+		super(message);
+		this.name = "ApiError";
+	}
+}
+
+export async function submitAnswer(
+	session: GameSession,
+	roundId: string,
+	value: SubmitAnswerInput["value"],
+) {
+	const body = SubmitAnswerSchema.parse({ value });
+	return request(
+		`/v1/rounds/${encodeURIComponent(roundId)}/answers`,
+		SubmitAnswerResponseSchema,
+		{
+			method: "POST",
+			headers: { authorization: `Bearer ${session.token}` },
+			body: JSON.stringify(body),
+		},
+	);
+}
+
+export async function leaveGame(session: GameSession) {
+	return request(
+		`/v1/games/${encodeURIComponent(session.gameId)}/leave`,
+		LeaveGameResponseSchema,
+		{
+			method: "POST",
+			headers: { authorization: `Bearer ${session.token}` },
+			body: "{}",
+		},
+	);
+}
+
+export async function endGame(session: GameSession) {
+	return request(
+		`/v1/games/${encodeURIComponent(session.gameId)}/end`,
+		EndGameResponseSchema,
+		{
+			method: "POST",
+			headers: { authorization: `Bearer ${session.token}` },
+			body: "{}",
+		},
+	);
 }

@@ -4,7 +4,7 @@
 
 **Goal:** Deliver the Carpool Quiz League MVP in small, reviewable changes.
 
-**Progress note (2026-10-08):** Foundation and release work remain partial: workspace/process/build commands, Docker Compose API/PostgreSQL, the PWA lobby and `.github/workflows/ci.yml` are installed. Local PostgreSQL 16.14 checks establish independent-connection answer/open/reveal locking, post-wait deadlines and scoring rollback. Create, join, atomic first-round start, full authorized snapshots, answer/leave routes, server round transitions and the one-second coordinator are implemented. Completion/capacity is implemented; realtime delivery and gameplay screens remain pending. [Hosted baseline CI](https://github.com/pattarapolj/carpool-gaming/actions/runs/37673236828) passed at `ce644fd`; this completion/capacity slice awaits its own hosted run after review/push. Main protection remains unavailable for the current private repository (API 403 requires GitHub Pro or public visibility); no settings were changed. The ten milestones are not marked complete. See [README](../../README.md) for observed evidence and [CONTRIBUTING](../../CONTRIBUTING.md) for the branch workflow.
+**Progress note (2026-10-08):** Foundation and release work remain partial: workspace/process/build commands, Docker Compose API/PostgreSQL, the PWA and `.github/workflows/ci.yml` are installed. Local PostgreSQL 16.14 checks establish independent-connection locking, post-wait deadlines, scoring rollback and authenticated live delivery. Lobby, round, completion/capacity and live-server behavior are implemented. Passenger gameplay, recovery, lifecycle controls and invite sharing now have component/race-test evidence; actual browser/phone acceptance remains Task 9. [Hosted live-delivery baseline CI](https://github.com/pattarapolj/carpool-gaming/actions/runs/37724585885) passed at `f6bfdc3`; this UI slice awaits fresh review and its own hosted run. Main protection remains unavailable for the current private repository (API 403 requires GitHub Pro or public visibility); no settings were changed. Release/production hosting is not complete. See [README](../../README.md) for evidence and [CONTRIBUTING](../../CONTRIBUTING.md) for the branch workflow.
 
 The tasks are milestones, not mandatory PR sizes. Deliver one reviewable behavior per PR; a large milestone can take several PRs. Write tests for the next behavior and implement it before expanding to the next. Use the contract decision register before committing to an ambiguous contract.
 
@@ -79,9 +79,9 @@ flowchart LR
 **Depends on:** Task 1 and the screen contracts from Task 2.  
 **References:** LLD §§8 and 10; contracts §9 events and §10 synchronization decisions.
 
-- [ ] Build Welcome, Lobby, Question, Locked, Results, and Reconnecting screens using mock contract data.
-- [ ] Add semantic controls, visible focus, contrast, and 48px minimum touch targets.
-- [ ] Add a component test for an open round’s prompt and answer controls.
+- [x] Build Welcome, Lobby, Question, Locked, Results, and Reconnecting screens (production snapshots; contract fixtures in tests).
+- [x] Add semantic controls, visible focus, contrast, and 48px minimum touch targets.
+- [x] Add a component test for an open round’s prompt and answer controls.
 - [ ] Check all screens at a phone-sized viewport.
 - [ ] Commit `feat: add captain app shell`.
 
@@ -147,11 +147,13 @@ flowchart LR
 **Depends on:** Tasks 5 and 7.  
 **References:** LLD §§8 and 10; contracts §9 events and §10 synchronization decisions.
 
-- [ ] Replace mock state with a typed snapshot plus Socket.IO event reducer.
-- [ ] Submit exactly one selected answer; disable controls only after successful server confirmation.
-- [ ] Agree on the gap-free snapshot/subscription protocol in contracts, then implement and test synchronization on reconnect.
-- [ ] Test `round.started`, `answer.locked`, `round.revealed`, and reconnect state transitions.
-- [ ] Commit `feat: add live captain gameplay`.
+- [x] Use typed authoritative snapshots; Socket.IO events invalidate serialized reads instead of overwriting partial state (approved synchronization protocol).
+- [x] Submit exactly one selected answer with separate confirmation; successful confirmation/stored own answer locks controls, while busy requests temporarily disable them.
+- [x] Implement the approved subscription-before-snapshot protocol, dirty buffering, bounded acknowledgement timeout, session/connection epochs and 15-second reconciliation.
+- [x] Test `round.started`, `answer.locked`, `round.revealed`, completion and reconnect state transitions, lost answer responses and explicit lifecycle controls.
+- [x] Commit `feat: add live captain gameplay`.
+
+Component verification is delivered. Fresh task review, hosted UI CI and real multi-session browser/phone acceptance remain separate gates; mocks do not establish those observations.
 
 **Done when:** refreshing a question, locked, and results screen restores the correct server state and never exposes a pre-reveal answer key.
 
