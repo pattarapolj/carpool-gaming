@@ -9,6 +9,7 @@
 		"lint:fix": "biome check --write .",
 		"start": "pnpm --filter @carpool/api start",
 		"test": "pnpm --recursive test",
+		"test:browser": "pnpm --filter @carpool/api test:browser",
 		"typecheck": "pnpm --recursive typecheck"
 	},
 	"packageManager": "pnpm@10.23.0",
