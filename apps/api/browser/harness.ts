@@ -27,21 +27,17 @@ export async function browserHarness() {
 	const originalOrigin = process.env.FRONTEND_ORIGIN;
 	const url = "http://127.0.0.1:5174";
 	async function close() {
-		try {
-			await browser?.close();
-			await web?.close();
-			await live?.close();
-			await app.close();
-		} finally {
-			try {
-				await db.end();
-				if (created) await control.query(`DROP SCHEMA ${schema} CASCADE`);
-			} finally {
-				await control.end();
-				if (originalOrigin === undefined) delete process.env.FRONTEND_ORIGIN;
-				else process.env.FRONTEND_ORIGIN = originalOrigin;
-			}
-		}
+		await closeBrowserHarness({
+			browser,
+			web,
+			live,
+			app,
+			db,
+			control,
+			schema,
+			created,
+			originalOrigin,
+		});
 	}
 	try {
 		await control.query(`CREATE SCHEMA ${schema}`);
@@ -110,7 +106,61 @@ export async function browserHarness() {
 			tick: () => tick(db, () => new Date(), live?.publishTransition),
 		};
 	} catch (error) {
-		await close();
+		try {
+			await close();
+		} catch (cleanupError) {
+			throw new AggregateError(
+				[error, cleanupError],
+				"Browser acceptance setup and cleanup failed",
+			);
+		}
 		throw error;
 	}
+}
+
+export async function closeBrowserHarness(resources: {
+	browser?: { close: () => unknown };
+	web?: { close: () => unknown };
+	live?: { close: () => unknown };
+	app: { close: () => unknown };
+	db: { end: () => unknown };
+	control: { end: () => unknown; query: (sql: string) => unknown };
+	schema: string;
+	created: boolean;
+	originalOrigin: string | undefined;
+}) {
+	const {
+		browser,
+		web,
+		live,
+		app,
+		db,
+		control,
+		schema,
+		created,
+		originalOrigin,
+	} = resources;
+	const errors: unknown[] = [];
+	for (const stop of [
+		() => browser?.close(),
+		() => web?.close(),
+		() => live?.close(),
+		() => app.close(),
+		() => db.end(),
+		() =>
+			created ? control.query(`DROP SCHEMA ${schema} CASCADE`) : undefined,
+		() => control.end(),
+		() => {
+			if (originalOrigin === undefined) delete process.env.FRONTEND_ORIGIN;
+			else process.env.FRONTEND_ORIGIN = originalOrigin;
+		},
+	]) {
+		try {
+			await stop();
+		} catch (error) {
+			errors.push(error);
+		}
+	}
+	if (errors.length)
+		throw new AggregateError(errors, "Browser acceptance cleanup failed");
 }
