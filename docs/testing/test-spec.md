@@ -409,7 +409,7 @@ This table is the central traceability map. Requirement IDs come from [product](
 | PR-11 | Screen acceptance | Browser screens and request operations | `CreateGameScreen`, `QuestionScreen`, `ResultsScreen` and related screen suites | Component: visible controls/errors, explicit answer confirmation, correct role/phase. |
 | PR-11 | Passenger operation | Screens | Manual three-car/mobile checklist | Manual: focus, readability, touch controls and no driver screen interaction. Record actual device/viewport and observations. |
 | PR-04–PR-09 | End-to-end game loop | API, database, coordinator and real clients | `game-flow`: three cars, one reveal and identical leaderboard | Flow: actual modules agree on content, lock state, reveal and ranking; no mocked game engine. |
-| PR-12 | Pending completion/capacity rules | Future completion and join/coordinator behavior | Add limit, host-end, two-hour and question-exhaustion cases after agreement | Not ready to implement: include 20-car boundary, rejected excess, authorized end and final-state behavior once specified. |
+| PR-12 | Contracts §8 completion/capacity | Join, end, start, coordinator and snapshot | `lifecycle.test.ts`, `postgres-check.ts` | 20th/21st ACTIVE and competing final slot; duplicate/LEFT precedence; authorized/idempotent host end in lobby/OPEN/results; safe errors; hard boundary/full last window; after-lock late rejection; exhaustion/empty-bank start; no ACTIVE preserves OPEN deadline; completion/scoring rollback and atomic snapshot. |
 
 ### Worked scoring and time examples
 

@@ -106,7 +106,7 @@ Architecture diagrams, database choices and wire examples belong in [design](des
 ### First-release ceiling
 
 - Private games of up to 20 cars.
-- Games up to two hours long.
+- Games up to two hours from start; no new question window may cross that limit.
 - Mobile web only; normal internet is required during rounds.
 
 ### Acceptance criteria
@@ -141,6 +141,6 @@ These IDs identify the product intent above. They are stable references for desi
 | PR-09 | Sessions and unrevealed answers remain private. | Roles and game isolation enforced; no credentials/hashes/answer keys in inappropriate views. |
 | PR-10 | Leaving cannot force an early reveal. | Open-round participant count is unchanged; explicit leave immediately prevents new answers and excludes future participation. |
 | PR-11 | Passengers can operate the app without driver screen use. | Mobile readability, focus, adequate touch targets and confirmation. |
-| PR-12 | Games respect the first-release limits and reach completion. | Up to 20 cars and two hours; limit enforcement, host end and question-exhaustion contracts pending. |
+| PR-12 | Games respect the first-release limits and reach completion. | Up to 20 ACTIVE cars with serialized admission; idempotent owning-host end; two-hour limit; bank exhaustion/no-ACTIVE completion. Backend policy settled in contracts section 8; gameplay UI/live delivery remain pending. |
 
-PR-08 and PR-12 have unresolved detailed behavior in the contract decision register. They must not be called fully specified or verified yet.
+PR-08 retains an unresolved live synchronization protocol. PR-12 backend completion/capacity behavior is settled; this does not claim final UI/live release acceptance.

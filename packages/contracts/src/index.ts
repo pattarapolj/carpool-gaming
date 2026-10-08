@@ -38,9 +38,9 @@ export const StartGameSchema = z.object({
 export const StartGameResponseSchema = z.object({
 	game: z.object({
 		id: z.string().uuid(),
-		status: z.literal("WAITING"),
+		status: z.enum(["WAITING", "COMPLETE"]),
 		startedAt: z.string().datetime(),
-		nextRoundAt: z.string().datetime(),
+		nextRoundAt: z.string().datetime().nullable(),
 	}),
 });
 
@@ -81,6 +81,28 @@ const SnapshotTeamSchema = z.object({
 export const LeaderboardSchema = z.array(
 	SnapshotTeamSchema.extend({ rank: z.number().int().positive() }),
 );
+export const CompletionReasonSchema = z.enum([
+	"HOST_ENDED",
+	"TIME_LIMIT",
+	"QUESTION_BANK_EXHAUSTED",
+	"NO_ACTIVE_TEAMS",
+]);
+export const EndGameSchema = z.object({}).strict();
+export const EndGameResponseSchema = z
+	.object({
+		game: z
+			.object({
+				id: z.string().uuid(),
+				status: z.literal("COMPLETE"),
+				completedAt: z.string().datetime().nullable(),
+				completionReason: CompletionReasonSchema.nullable(),
+			})
+			.strict(),
+		leaderboard: LeaderboardSchema,
+	})
+	.strict();
+export type EndedGame = z.infer<typeof EndGameResponseSchema>;
+export type CompletionReason = z.infer<typeof CompletionReasonSchema>;
 export const RoundResultsSchema = z
 	.array(
 		z.object({
@@ -140,6 +162,8 @@ export const GameSnapshotSchema = z
 			]),
 			startedAt: z.string().datetime().nullable(),
 			nextRoundAt: z.string().datetime().nullable(),
+			completedAt: z.string().datetime().nullable(),
+			completionReason: CompletionReasonSchema.nullable(),
 		}),
 		teams: z.array(
 			z.object({

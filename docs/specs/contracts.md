@@ -190,17 +190,20 @@ You can write tests for the settled rules while these decisions are discussed. S
 | `400` | `MALFORMED_JSON` | Body is not JSON. |
 | `404` | `GAME_NOT_FOUND` | No game has the normalized six-character join code. |
 | `409` | `TEAM_NAME_TAKEN` | An existing team in the game has the same case-insensitive normalized name. |
+| `409` | `GAME_FULL` | The lobby already has 20 ACTIVE teams. |
 | `409` | `GAME_NOT_JOINABLE` | The game status is not `LOBBY`. |
 | `422` | `VALIDATION_ERROR` | Name is missing, blank, or over 60 characters. |
 | `500` | `INTERNAL_ERROR` | Token or team persistence fails unexpectedly. |
+
+Admission holds the exclusive game lock across status/name/capacity checks and insertion. Check LOBBY first, duplicate name second (including LEFT teams), then the 20-ACTIVE cap. LEFT frees capacity; its name stays reserved. Competing final-slot joins cannot exceed 20.
 
 ### `POST /v1/games/:gameId/start`
 
 **Caller:** host. **Authorization:** host token. **Body:** `{ "practice": false }` by default.
 
-**200 response:** `{ "game": { "status": "WAITING", "startedAt": "…", "nextRoundAt": "…" } }`.
+**200 response:** `{ "game": { "id": "UUID", "status": "WAITING", "startedAt": "ISO timestamp", "nextRoundAt": "ISO timestamp" } }`. For an empty active question bank, status is `COMPLETE` and `nextRoundAt` is null; `startedAt` remains the committed start time.
 
-Successful start opens the first available question in the same transaction, at `startedAt`, with a full answer window. `nextRoundAt` in the response is the committed next future interval boundary, not the intermediate immediate due timestamp. If the bank is empty, opening safely does nothing and the immediate due timestamp remains until completion policy is delivered. A failed opening rolls back start as well.
+Successful start opens the first available question in the same transaction, at `startedAt`, with a full answer window. `nextRoundAt` is the committed next future interval boundary. An empty bank completes atomically with `QUESTION_BANK_EXHAUSTED`. A failed opening or completion rolls back start as well. Completion metadata is supplied by snapshot/end.
 
 **Acceptance:** requires at least two active teams unless the request uses explicit `practice: true`; a non-host receives `403`; a started game receives `409`.
 
@@ -231,7 +234,9 @@ Successful start opens the first available question in the same transaction, at 
 		"status": "LOBBY",
 		"roundIntervalSeconds": 300,
 		"startedAt": null,
-		"nextRoundAt": null
+		"nextRoundAt": null,
+		"completedAt": null,
+		"completionReason": null
 	},
 	"teams": [{ "id": "…", "name": "Blue Sedan", "score": 0, "status": "ACTIVE" }]
 }
@@ -241,6 +246,8 @@ The full snapshot retains the game fields and ACTIVE-only `teams` above for lobb
 
 | Field | Exact shape and null behavior |
 |---|---|
+| `game.completedAt` | ISO timestamp of the committed completion, or null before completion and for legacy COMPLETE games without known metadata. |
+| `game.completionReason` | `HOST_ENDED`, `TIME_LIMIT`, `QUESTION_BANK_EXHAUSTED`, `NO_ACTIVE_TEAMS`, or null before completion/for unknown legacy completion. |
 | `round` | `null` before any delivered round; otherwise the latest round by sequence, including after game completion. |
 | `ownAnswer` | `null` for hosts or a captain without an answer to the latest round; otherwise `{ answerId: UUID, value: string \| boolean \| finite number, submittedAt: ISO timestamp }`. Remains available after reveal. Team identity comes only from the authenticated token. |
 | `callerTeam` | `null` for hosts; otherwise `{ id: UUID, name: string, score: integer, status: ACTIVE \| LEFT }` for the token's team, including a team that left. |
@@ -254,7 +261,7 @@ The full snapshot retains the game fields and ACTIVE-only `teams` above for lobb
 
 No snapshot returns raw credentials, token hashes or internal source attribution. Refresh builds REVEALED results from persisted answer grades and the captured roster without awarding points again. Question keys/explanations are not publicly editable in this MVP. The snapshot takes a transaction-scoped shared game lock before all round/team/answer/leaderboard reads, validates ownership inside that view, and therefore observes one committed transition state. Every game mutation takes the exclusive game lock first. HTTP and the future socket handshake use this same authorized service; socket delivery/synchronization remains pending.
 
-The listening API runs a tick every second, with no concurrent runtime tick. It reveals eligible OPEN rounds and opens due rounds using guarded transactions and server clocks sampled after lock acquisition; overlapping callers cannot reveal or score twice. A delayed process opens one fresh full window and skips missed anchored slots. Tick errors are logged and retried on the next interval; shutdown clears the timer and drains work before closing storage. No unused questions or no active teams is currently a safe no-op; automatic completion and realtime publication remain required later work.
+The listening API runs a tick every second, with no concurrent runtime tick. It reveals eligible OPEN rounds, checks completion and opens due rounds using game-locked transactions and clocks sampled after lock acquisition; overlapping callers cannot reveal or score twice. A delayed process opens one fresh full window and skips missed anchored slots. Tick errors are logged and retried; shutdown drains work before closing storage. Completion follows the policy below; realtime publication remains later work.
 
 **Acceptance:** a token from another game receives `403`; a reconnect returns the server’s actual phase; open-round JSON contains no `correctAnswer` text.
 
@@ -297,7 +304,7 @@ The captain's team ID comes only from token lookup. Extra request fields are str
 | `409` | `TEAM_LEFT` | Captain's team has status `LEFT`. |
 | `409` | `ROUND_NOT_OPEN` | Round has already been revealed. |
 | `409` | `ANSWER_ALREADY_LOCKED` | The unique answer constraint finds an earlier answer for this team and round. |
-| `422` | `ROUND_EXPIRED` | Server time is at or after `ends_at`. |
+| `422` | `ROUND_EXPIRED` | Server time after lock waits is at/after `ends_at` or `started_at + 2 hours`, even before the coordinator completes the game. |
 | `422` | `INVALID_ANSWER_VALUE` | Value type or choice ID is invalid for the round's question. |
 | `500` | `INTERNAL_ERROR` | Lock or scoring transaction fails unexpectedly. |
 
@@ -321,6 +328,28 @@ Explicit leave immediately prevents new answers (`409 TEAM_LEFT`). Already locke
 | `409` | `GAME_COMPLETE` | The game is already complete. |
 | `500` | `INTERNAL_ERROR` | Team update fails unexpectedly. |
 
+### `POST /v1/games/:gameId/end` and automatic completion
+
+**Caller:** owning host only. Body may be omitted or a strict empty object `{}`. A joined lobby ends with its actual zero-score all-team leaderboard; a zero-team lobby returns `[]`.
+
+**200 response:** `{ game: { id: UUID, status: COMPLETE, completedAt: ISO timestamp | null, completionReason: HOST_ENDED | TIME_LIMIT | QUESTION_BANK_EXHAUSTED | NO_ACTIVE_TEAMS | null }, leaderboard: LeaderboardSchema }`. These are the exact top-level/game fields. Leaderboard uses the existing all-team ranking shape. Repeated end preserves stored reason/time/results/scores, including null legacy metadata. During OPEN, host end force-reveals once using locked answers (unanswered zero) and completes in the same game-locked scoring transaction. Ending after results cannot score again. Snapshot retains the latest revealed result and final leaderboard.
+
+| Status | Code | Condition |
+|---|---|---|
+| `401` | `UNAUTHENTICATED` | Missing/invalid bearer token. |
+| `403` | `FORBIDDEN` | Valid token has wrong role or belongs to another game. |
+| `404` | `GAME_NOT_FOUND` | Unknown/malformed game ID after authentication. |
+| `400` | `MALFORMED_JSON` | Malformed JSON. |
+| `422` | `VALIDATION_ERROR` | Body is null, non-object, or contains fields. |
+| `500` | `INTERNAL_ERROR` | Unexpected failure, standard safe envelope. |
+
+Automatic reason precedence is `TIME_LIMIT`, then `NO_ACTIVE_TEAMS`, then `QUESTION_BANK_EXHAUSTED`; first explicit host end uses `HOST_ENDED`. A completed game never changes reason.
+
+- The hard limit is `started_at + 2 hours`. No round opens at/after it, or when its full configured 45–60 second window would cross it. Wait through that final short gap until the limit; never shorten a window. At the limit, reveal locked answers once and COMPLETE atomically, including delayed/legacy OPEN rounds whose deadline extends past the limit.
+- After the last unused active-bank question reveals, complete immediately in that scoring transaction. Internal reveal has `nextRoundAt: null`; no question repeats or phantom future round is advertised. Empty-bank start completes safely.
+- No ACTIVE teams: preserve existing OPEN round until its original deadline, then reveal and complete. Without OPEN, complete on the next coordinator check even before `nextRoundAt`. Leaving never triggers early reveal; disconnect never counts as leave. Host end overrides waiting.
+- New completion saves timestamp/reason, clears `next_round_at`, and commits with grading/reveal. Migration 005 preserves unknown legacy metadata as null.
+
 ## 9. Live-event contract
 
 The browser opens Socket.IO with `{ auth: { token } }`. The server validates the token and authorizes subscriptions only for its game. The exact snapshot/subscription handshake remains pending section 10; do not implement an uncoordinated fetch-then-subscribe sequence as a settled requirement.
@@ -343,12 +372,12 @@ Review findings recorded on 2026-09-05. The proposals in this table are discussi
 |---|---|---|
 | Leave/answer logic — resolved Task 6a | Explicit leave immediately makes the team ineligible for new submissions; disconnect alone does not. | Keep expected count and prior locked answers; exclude LEFT from future rounds. Persistence tests cover immediate rejection, unanswered results and next-round exclusion. |
 | Reconnect/live UI | Snapshot-then-subscribe can miss a reveal between those operations. Round ID alone cannot distinguish open and revealed states for the same round. | Define a gap-free subscription/snapshot handshake and ordering information, then test an event during reconnection and a stale event for the same round. Do not assume Socket.IO reconnect alone restores all state. |
-| Completion | The state diagram says the host ends a game, but there is no end endpoint, authorization/error contract or host control. The two-hour limit and question exhaustion also lack exact completion rules. | Agree when/how completion occurs, including during an open round and with an empty question bank. Add endpoint/event/UI acceptance and tests before implementing completion. |
+| Completion — resolved Task4b | Idempotent owning-host end, two-hour limit, bank exhaustion and no-ACTIVE completion follow section 8. | End/snapshot fields and actual committed start status are settled; realtime delivery and gameplay UI remain later work. |
 | Answer retries — resolved Task 6a | Duplicate answers return `409 ANSWER_ALREADY_LOCKED` and never mutate the prior submission. | No idempotent success replay; full snapshot recovery follows with the reconnect slice. |
 | Coordinator/persistence — resolved Task 6a | Game-first row locking serializes open, answer, reveal and leave; a locked OPEN-to-REVEALED transition applies scores once. | Grade/score/reveal failures roll back together. Serialized PGlite contenders pass; independent PostgreSQL connections remain required acceptance evidence. |
-| Restart recovery — resolved Task 6a | Skip missed schedule slots; open one fresh round at server now with its full question window. | Sequence counts delivered rounds, not missed slots. The next time is the first future interval boundary anchored at `started_at`; early reveal never shifts it. No-active-team/exhausted-bank opening is a safe no-op pending completion policy. |
+| Restart recovery — resolved Task 6a | Skip missed schedule slots; open one fresh round at server now with its full question window. | Sequence counts delivered rounds, not missed slots. The next time is the first future interval boundary anchored at `started_at`; early reveal never shifts it. No-active-team/exhausted-bank opening follows the Task4b completion policy; full windows cannot cross the hard limit. |
 | Client view definitions | Snapshot and event payloads are abbreviated; same-round ordering, leaderboard tie display and nullable fields are incomplete. | Agree on full public schemas and ordering information, then update fixtures and state-transition tests together. |
 | Session expiry and live-event recovery | Authentication refers to expiry without defining lifetime; a committed transition could fail to broadcast. | Specify lifetime/revocation and how clients recover a missed publication. Preserve safe authentication failure handling and test recovery independently of database rollback. |
-| Capacity enforcement | Product PR-12 says up to 20 cars but does not define excess-team error behavior or concurrent join handling. | Agree on the rejection contract and test the boundary, including concurrent requests for the last available slot. |
+| Capacity enforcement — resolved Task4b | Up to 20 ACTIVE teams under the game lock; LOBBY then duplicate-name then capacity precedence. | Excess `409 GAME_FULL`; LEFT frees capacity without freeing its name; independent final-slot contention tested. |
 
 The ERD is a conceptual overview; [LLD section 4](lld.md#4-persistent-data) owns the detailed schema. Keep the source/export aligned when changing the diagram. Question-source attribution promised by the product requirements still needs a storage/seed decision before the question bank ships.

@@ -12,6 +12,8 @@ const snapshot = {
 		roundIntervalSeconds: 300,
 		startedAt: now,
 		nextRoundAt: now,
+		completedAt: null,
+		completionReason: null,
 	},
 	teams: [],
 	callerTeam: null,

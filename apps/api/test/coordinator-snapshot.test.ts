@@ -68,6 +68,7 @@ async function fixture(count = 3) {
 it("successful start commits the first question immediately and advances the anchored schedule", async () => {
 	const { gameId, host } = await fixture();
 	const started = await startGame(gameId, false, host, storage);
+	assert(started.nextRoundAt);
 	const rounds = await db.query<{
 		starts_at: Date;
 		ends_at: Date;

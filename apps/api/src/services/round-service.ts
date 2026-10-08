@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
+	CompletionReason,
+	EndedGame,
 	GameSnapshot,
 	LeftGame,
 	RoundResult,
@@ -19,7 +21,17 @@ type Round = {
 	type: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "ESTIMATE";
 	choices: string[] | null;
 	expected_team_ids: string[] | null;
+	game_status: string;
+	game_started_at: Date | null;
 };
+const GAME_LIMIT_MS = 2 * 60 * 60 * 1000;
+
+function timeLimitReached(startedAt: Date | null, now: Date) {
+	return (
+		startedAt !== null &&
+		now.getTime() >= new Date(startedAt).getTime() + GAME_LIMIT_MS
+	);
+}
 
 export class RoundError extends Error {
 	constructor(
@@ -47,7 +59,7 @@ async function lockRound(roundId: string, db: QueryDb) {
 	if (!games.rows[0])
 		throw new RoundError(404, "ROUND_NOT_FOUND", "Round not found");
 	const rounds = (await db.query(
-		"SELECT r.*, q.type, q.choices FROM rounds r JOIN questions q ON q.id=r.question_id WHERE r.id=$1 FOR UPDATE OF r",
+		"SELECT r.*, q.type, q.choices,g.status AS game_status,g.started_at AS game_started_at FROM rounds r JOIN questions q ON q.id=r.question_id JOIN games g ON g.id=r.game_id WHERE r.id=$1 FOR UPDATE OF r",
 		[roundId],
 	)) as Rows<Round>;
 	return rounds.rows[0];
@@ -81,10 +93,13 @@ export async function lockAnswer(
 				"ANSWER_ALREADY_LOCKED",
 				"Answer already locked",
 			);
-		if (round.status !== "OPEN")
+		if (round.status !== "OPEN" || round.game_status === "COMPLETE")
 			throw new RoundError(409, "ROUND_NOT_OPEN", "Round is not open");
 		const now = clock();
-		if (now >= new Date(round.ends_at))
+		if (
+			now >= new Date(round.ends_at) ||
+			timeLimitReached(round.game_started_at, now)
+		)
 			throw new RoundError(422, "ROUND_EXPIRED", "Round has expired");
 		const { value } = input;
 		const valid =
@@ -130,6 +145,10 @@ export async function openDueRoundInTransaction(
 	tx: QueryDb,
 	clock: Clock = () => new Date(),
 ) {
+	return (await openLockedGame(gameId, tx, clock)).opened;
+}
+
+async function openLockedGame(gameId: string, tx: QueryDb, clock: Clock) {
 	const games = (await tx.query(
 		"SELECT status,started_at,next_round_at,round_interval_seconds,question_window_seconds FROM games WHERE id::text=$1 FOR UPDATE",
 		[gameId],
@@ -142,17 +161,23 @@ export async function openDueRoundInTransaction(
 	}>;
 	const game = games.rows[0];
 	if (game?.status !== "WAITING" || !game.started_at || !game.next_round_at)
-		return null;
+		return { opened: null, completion: null };
 	const previous = (await tx.query(
-		"SELECT sequence,status FROM rounds WHERE game_id=$1 ORDER BY sequence DESC LIMIT 1",
+		"SELECT id,sequence,status FROM rounds WHERE game_id=$1 ORDER BY sequence DESC LIMIT 1",
 		[gameId],
-	)) as Rows<{ sequence: number; status: string }>;
-	if (previous.rows[0]?.status === "OPEN") return null;
+	)) as Rows<{ id: string; sequence: number; status: string }>;
+	if (previous.rows[0]?.status === "OPEN") {
+		const round = await lockRound(previous.rows[0].id, tx);
+		const now = clock();
+		if (!timeLimitReached(round.game_started_at, now))
+			return { opened: null, completion: null };
+		const reveal = await revealLockedRound(round, tx, () => now);
+		return { opened: null, completion: reveal?.completion ?? null };
+	}
 	const teams = (await tx.query(
 		"SELECT id FROM car_teams WHERE game_id=$1 AND status='ACTIVE' ORDER BY id FOR UPDATE",
 		[gameId],
 	)) as Rows<{ id: string }>;
-	if (!teams.rows.length) return null;
 	const questions = (await tx.query(
 		"SELECT id,type,prompt,choices FROM questions q WHERE is_active AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.game_id=$1 AND r.question_id=q.id) ORDER BY id LIMIT 1",
 		[gameId],
@@ -163,9 +188,26 @@ export async function openDueRoundInTransaction(
 		choices: string[] | null;
 	}>;
 	const question = questions.rows[0];
-	if (!question) return null;
 	const now = clock();
-	if (now < new Date(game.next_round_at)) return null;
+	const reason = timeLimitReached(game.started_at, now)
+		? "TIME_LIMIT"
+		: !teams.rows.length
+			? "NO_ACTIVE_TEAMS"
+			: !question
+				? "QUESTION_BANK_EXHAUSTED"
+				: null;
+	if (reason)
+		return {
+			opened: null,
+			completion: await completeLockedGame(gameId, reason, tx, now),
+		};
+	if (
+		!question ||
+		now < new Date(game.next_round_at) ||
+		now.getTime() + game.question_window_seconds * 1000 >
+			new Date(game.started_at).getTime() + GAME_LIMIT_MS
+	)
+		return { opened: null, completion: null };
 	const interval = game.round_interval_seconds * 1000;
 	const anchor = new Date(game.started_at).getTime();
 	// Sequence counts delivered rounds; missed schedule slots are skipped.
@@ -193,16 +235,19 @@ export async function openDueRoundInTransaction(
 		nextRoundAt,
 	]);
 	return {
-		gameId,
-		round: {
-			id,
-			sequence,
-			status: "OPEN" as const,
-			startsAt: now.toISOString(),
-			endsAt: endsAt.toISOString(),
-			question,
+		completion: null,
+		opened: {
+			gameId,
+			round: {
+				id,
+				sequence,
+				status: "OPEN" as const,
+				startsAt: now.toISOString(),
+				endsAt: endsAt.toISOString(),
+				question,
+			},
+			nextRoundAt: nextRoundAt.toISOString(),
 		},
-		nextRoundAt: nextRoundAt.toISOString(),
 	};
 }
 
@@ -216,7 +261,12 @@ export async function revealDueRound(
 	);
 }
 
-async function revealLockedRound(round: Round, tx: QueryDb, clock: Clock) {
+async function revealLockedRound(
+	round: Round,
+	tx: QueryDb,
+	clock: Clock,
+	forcedReason?: CompletionReason,
+) {
 	if (round.status !== "OPEN") return null;
 	const answers = (await tx.query(
 		"SELECT count(*) AS count FROM answers WHERE round_id=$1",
@@ -224,6 +274,8 @@ async function revealLockedRound(round: Round, tx: QueryDb, clock: Clock) {
 	)) as Rows<{ count: string }>;
 	const now = clock();
 	if (
+		!forcedReason &&
+		!timeLimitReached(round.game_started_at, now) &&
 		Number(answers.rows[0].count) < round.expected_team_count &&
 		now < new Date(round.ends_at)
 	)
@@ -248,13 +300,18 @@ async function revealLockedRound(round: Round, tx: QueryDb, clock: Clock) {
 		"UPDATE rounds SET status='REVEALED',revealed_at=$2 WHERE id=$1",
 		[round.id, now],
 	);
+	const reason =
+		forcedReason ?? (await automaticCompletionReason(round.game_id, tx, now));
+	const completion = reason
+		? await completeLockedGame(round.game_id, reason, tx, now)
+		: null;
 	const detail = (await tx.query(
 		'SELECT q.correct_answer AS "correctAnswer",q.explanation,g.next_round_at AS "nextRoundAt" FROM rounds r JOIN questions q ON q.id=r.question_id JOIN games g ON g.id=r.game_id WHERE r.id=$1',
 		[round.id],
 	)) as Rows<{
 		correctAnswer: string | boolean | number;
 		explanation: string;
-		nextRoundAt: Date;
+		nextRoundAt: Date | null;
 	}>;
 	const results = await getRoundResults(
 		round.id,
@@ -271,8 +328,142 @@ async function revealLockedRound(round: Round, tx: QueryDb, clock: Clock) {
 		explanation: detail.rows[0].explanation,
 		results,
 		leaderboard,
-		nextRoundAt: new Date(detail.rows[0].nextRoundAt).toISOString(),
+		nextRoundAt:
+			detail.rows[0].nextRoundAt === null
+				? null
+				: new Date(detail.rows[0].nextRoundAt).toISOString(),
+		completion,
 	};
+}
+
+async function automaticCompletionReason(
+	gameId: string,
+	tx: QueryDb,
+	now: Date,
+): Promise<CompletionReason | null> {
+	const state = (await tx.query(
+		`SELECT started_at,
+		EXISTS (SELECT 1 FROM car_teams WHERE game_id=$1 AND status='ACTIVE') AS active,
+		EXISTS (SELECT 1 FROM questions q WHERE is_active AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.game_id=$1 AND r.question_id=q.id)) AS unused
+		FROM games WHERE id=$1`,
+		[gameId],
+	)) as Rows<{ started_at: Date | null; active: boolean; unused: boolean }>;
+	const game = state.rows[0];
+	return timeLimitReached(game.started_at, now)
+		? "TIME_LIMIT"
+		: !game.active
+			? "NO_ACTIVE_TEAMS"
+			: !game.unused
+				? "QUESTION_BANK_EXHAUSTED"
+				: null;
+}
+
+async function completionView(gameId: string, tx: QueryDb): Promise<EndedGame> {
+	const result = (await tx.query(
+		'SELECT id,status,completed_at AS "completedAt",completion_reason AS "completionReason" FROM games WHERE id=$1',
+		[gameId],
+	)) as Rows<
+		Omit<EndedGame["game"], "completedAt"> & {
+			completedAt: Date | string | null;
+		}
+	>;
+	const game = result.rows[0];
+	return {
+		game: {
+			...game,
+			completedAt:
+				game.completedAt === null
+					? null
+					: new Date(game.completedAt).toISOString(),
+		},
+		leaderboard: await getLeaderboard(gameId, tx),
+	};
+}
+
+async function completeLockedGame(
+	gameId: string,
+	reason: CompletionReason,
+	tx: QueryDb,
+	now: Date,
+) {
+	await tx.query(
+		"UPDATE games SET status='COMPLETE',next_round_at=NULL,completed_at=$2,completion_reason=$3 WHERE id=$1 AND status!='COMPLETE'",
+		[gameId, now, reason],
+	);
+	return completionView(gameId, tx);
+}
+
+export async function endGame(
+	gameId: string,
+	session: Session,
+	db: GameDb,
+	clock: Clock = () => new Date(),
+) {
+	return db.transaction(async (tx) => {
+		const games = (await tx.query(
+			"SELECT id,status FROM games WHERE id::text=$1 FOR UPDATE",
+			[gameId],
+		)) as Rows<{ id: string; status: string }>;
+		const game = games.rows[0];
+		if (!game) throw new RoundError(404, "GAME_NOT_FOUND", "Game not found");
+		if (session.role !== "HOST" || session.gameId !== gameId)
+			throw new RoundError(403, "FORBIDDEN", "Host access required");
+		if (game.status === "COMPLETE") return completionView(gameId, tx);
+		const rounds = (await tx.query(
+			"SELECT id FROM rounds WHERE game_id=$1 AND status='OPEN'",
+			[gameId],
+		)) as Rows<{ id: string }>;
+		if (rounds.rows[0]) {
+			const reveal = await revealLockedRound(
+				await lockRound(rounds.rows[0].id, tx),
+				tx,
+				clock,
+				"HOST_ENDED",
+			);
+			if (reveal?.completion) return reveal.completion;
+		}
+		return completeLockedGame(gameId, "HOST_ENDED", tx, clock());
+	});
+}
+
+// Coordinator returns only committed work; callers may publish it after this resolves.
+export async function processDueGame(
+	gameId: string,
+	db: GameDb,
+	clock: Clock = () => new Date(),
+) {
+	return db.transaction(async (tx) => {
+		const games = (await tx.query(
+			"SELECT status FROM games WHERE id::text=$1 FOR UPDATE",
+			[gameId],
+		)) as Rows<{ status: string }>;
+		if (games.rows[0]?.status !== "WAITING")
+			return { gameId, opened: null, reveal: null, completion: null };
+		const rounds = (await tx.query(
+			"SELECT id FROM rounds WHERE game_id=$1 AND status='OPEN'",
+			[gameId],
+		)) as Rows<{ id: string }>;
+		const reveal = rounds.rows[0]
+			? await revealLockedRound(
+					await lockRound(rounds.rows[0].id, tx),
+					tx,
+					clock,
+				)
+			: null;
+		if (rounds.rows[0] && !reveal)
+			return { gameId, opened: null, reveal: null, completion: null };
+		const next = await openLockedGame(gameId, tx, clock);
+		const completion = reveal?.completion ?? next.completion;
+		return {
+			gameId,
+			...next,
+			reveal:
+				reveal && completion
+					? { ...reveal, nextRoundAt: null, completion }
+					: reveal,
+			completion,
+		};
+	});
 }
 
 export async function getRoundResults(

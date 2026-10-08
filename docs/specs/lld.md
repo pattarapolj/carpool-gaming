@@ -8,7 +8,7 @@
 
 ### Decisions to settle before implementation
 
-The [contract decision register](contracts.md#10-decisions-to-settle-before-implementation) owns unresolved behavior, including reconnect and completion. Leave, duplicate rejection, protected scoring and missed-slot recovery are settled below.
+The [contract decision register](contracts.md#10-decisions-to-settle-before-implementation) owns unresolved behavior, including reconnect. Completion/capacity, leave, duplicate rejection, protected scoring and missed-slot recovery are settled below.
 
 ## 1. Purpose and boundaries
 
@@ -45,7 +45,7 @@ Use `uuid` IDs, `timestamptz` timestamps, and `jsonb` for answer values and answ
 
 | Table | Columns | Rules |
 |---|---|---|
-| `games` | `id`, `name`, `join_code`, `host_token_hash`, `status`, `round_interval_seconds`, `question_window_seconds`, `started_at`, `next_round_at`, `created_at` | `join_code` is unique; status is `LOBBY`, `WAITING`, or `COMPLETE`. |
+| `games` | `id`, `name`, `join_code`, `host_token_hash`, `status`, `round_interval_seconds`, `question_window_seconds`, `started_at`, `next_round_at`, `completed_at`, `completion_reason`, `created_at` | `join_code` unique; status `LOBBY`, `WAITING`, or `COMPLETE`. Completion metadata is both null (unknown/before completion) or both populated on COMPLETE. |
 | `car_teams` | `id`, `game_id`, `name`, `captain_token_hash`, `status`, `score`, `joined_at` | Unique index on `(game_id, lower(name))`; status is `ACTIVE` or `LEFT`. |
 | `questions` | `id`, `type`, `prompt`, `choices`, `correct_answer`, `explanation`, `source_title`, `source_url`, `is_active` | Server-only answer key and source attribution; type is `MULTIPLE_CHOICE`, `TRUE_FALSE`, or `ESTIMATE`. |
 | `rounds` | `id`, `game_id`, `question_id`, `sequence`, `status`, `starts_at`, `ends_at`, `revealed_at`, `expected_team_count`, `expected_team_ids` | `UNIQUE(game_id, sequence)`; status is `OPEN` or `REVEALED`. Captured UUID array cardinality equals the expected count; legacy rows may have a NULL, unknown roster. |
@@ -61,23 +61,26 @@ The editable ERD is [carpool-quiz-league-erd.mmd](diagrams/carpool-quiz-league-e
 stateDiagram-v2
     [*] --> LOBBY
     LOBBY --> WAITING: host starts
+    LOBBY --> COMPLETE: host ends or empty-bank start
     WAITING --> OPEN: server time reaches next_round_at
     OPEN --> REVEALED: answer count equals expected_team_count
     OPEN --> REVEALED: server time reaches ends_at
+    OPEN --> REVEALED: host end or two-hour limit
     REVEALED --> WAITING: score saved; next round remains scheduled
-    WAITING --> COMPLETE: host ends game
+    WAITING --> COMPLETE: host ends, time limit or no active teams
+    REVEALED --> COMPLETE: host ends, time limit, no active teams or exhausted bank
 ```
 
 ### Timing rules
 
-The diagram combines game state (`LOBBY`, `WAITING`, `COMPLETE`) with current-round state (`OPEN`, `REVEALED`) for readability; they are stored separately. Completion is a required transition with a pending detailed contract.
+The diagram combines game state (`LOBBY`, `WAITING`, `COMPLETE`) with current-round state (`OPEN`, `REVEALED`) for readability; they are stored separately. Host end can complete any game phase, revealing OPEN in the same transaction. Automatic completion follows [contracts section 8](contracts.md#post-v1gamesgameidend-and-automatic-completion).
 
 1. `POST /start` sets `started_at` and `next_round_at` to the current server time.
 2. Start opens round 1 inside the same transaction because `now >= next_round_at`; the response reports the resulting committed future `next_round_at`.
 3. After missed schedule slots, open only one fresh round at server now. Sequence counts delivered rounds; the next scheduled time is the first anchored boundary strictly after now: `started_at + (floor((now - started_at) / interval) + 1) * interval`. This intentionally refines the original sequence-based formula, which only held when no slots were missed.
 4. Set `ends_at` to `starts_at + question_window_seconds` (60 seconds by default).
 5. An early reveal does **not** move the next scheduled round earlier.
-6. The answer transaction checks reveal after inserting an answer. The coordinator calls guarded opening/reveal transitions every second while the API is listening, logs errors, prevents overlapping runtime work and drains its tick before storage shutdown. No active teams or no unused active questions is a safe no-op pending completion policy.
+6. The answer transaction checks reveal after insertion. Coordinator checks reveal/completion/opening every second while listening, logs errors, prevents overlap and drains work before storage shutdown. Last-bank reveal completes immediately. No-ACTIVE completes immediately without OPEN, or after the existing OPEN deadline. Two-hour limit forces reveal/completion and prevents shortened final windows. Migration 005 adds nullable metadata without inventing legacy completion history.
 
 ### Scoring rules
 
@@ -136,7 +139,7 @@ Use the existing planned `game-service.ts` module. Database pool and clock acces
 | Proposed function | Inputs | Result / state change | Failures and constraints |
 |---|---|---|---|
 | `createGame` | Validated name and interval; database dependency. | Persist lobby and token hash; return the public game and raw host token. | Contract CG-01–CG-08. Uniqueness enforced in PostgreSQL; collision retry details pending. |
-| `joinGame` | Normalized join code and validated team name. | Persist an active team and captain-token hash; return game, team and raw captain token. | Unknown game, closed lobby, duplicate normalized name. Check/insert must not race a start; capacity handling needs the PR-12 decision. |
+| `joinGame` | Normalized join code and validated team name. | Persist ACTIVE team/captain hash; return game, team and raw captain token. | Game lock serializes LOBBY/name/20-ACTIVE checks and insertion. Duplicate including LEFT precedes `GAME_FULL`; LEFT frees a slot. |
 | `startGame` | Authenticated host identity, game ID, validated practice option and server time. | Persist start time and first eligible round time; return started game view. | Only owning host; sufficient active teams; game still in lobby. Concurrent starts must not start twice. |
 | `getGameSnapshot` | Authenticated identity and game ID. | Return atomic authorized game/team/round/own-answer/caller-team/leaderboard/server-time view; no mutation. | Shared game lock precedes all view reads. Exact nullable/discriminated shapes are settled in contracts §8; no raw tokens, hashes, open keys or other teams' locked values. |
 | `leaveGame` | Authenticated captain identity and game ID. | Mark only that team left immediately; repeated leave succeeds per contract; retain open-round expected count and locked answers. | Wrong role/game, completed game. |
@@ -150,12 +153,12 @@ In `auth.ts`, plan **`resolveSession`**: supplied bearer credential → host/cap
 | Proposed function / module | Inputs | Result / state change | Failures and constraints |
 |---|---|---|---|
 | Private scoring inside `round-service.ts` | Stored question key and validated submissions. | PostgreSQL numeric distance calculation, answer grades and cumulative team scores in the reveal transaction. | Unanswered teams get zero; all closest ties win; numeric arithmetic avoids overflow for finite JSON estimates. |
-| `openDueRound` in `round-service.ts` | Game ID, database, optional server clock function. | Save one public question, full window and participant IDs; return committed public round and next time, or NULL. | Game lock prevents duplicate openings. Skip missed slots; exhausted bank/no active teams is a no-op pending completion. |
+| `openDueRound` in `round-service.ts` | Game ID, database, optional server clock function. | Save one public question/full window/roster; return committed open result or NULL. | Game lock prevents duplicate openings. Exhaustion/no ACTIVE/time limit completes safely. A full window must fit before the limit. Start uses the same transaction helper and rereads actual committed WAITING/COMPLETE and nullable next time. |
 | `lockAnswer` in `round-service.ts` | Round ID, validated answer, authenticated session, database, optional server clock function. | Persist one immutable answer; return `{ answer, reveal }` after commit. HTTP sends only the locked answer confirmation. | Wrong role/game, LEFT, invalid choice/type, expired/revealed round, duplicate. Internal reveal is NULL unless this transaction reveals. |
 | `revealDueRound` in `round-service.ts` | Round ID, database, optional server clock function. | On all expected answers or expiry, return committed answer, explanation, participant results, leaderboard and fixed next time; otherwise NULL. | Concurrent callers cannot apply points twice. Failed transaction returns no committed result; early reveal never moves the schedule. |
 | `tick` in `coordinator.ts` | Database and optional server clock function. | Find playing games, reveal eligible rounds and open due rounds. | Repeat/overlap safely; skip missed slots. No publication until Socket.IO delivery is implemented. |
 
-`openDueRound` and `revealDueRound` are the coordinator transition interface. Start uses the same opening function on its existing transaction connection. Snapshot and reveal share persisted-result and competition-ranking builders; the full snapshot schema is now settled, while event payload delivery is still pending. No transition publishes events yet.
+`processDueGame(gameId, db, clock)` runs reveal/completion/opening under one game-locked transaction. Coordinator `tick` returns an array of committed `{ gameId, opened, reveal, completion }` objects only for changed games; null fields mean no such transition. `opened` is the existing public-round/next-time result; reveal retains results/leaderboard and nullable next time plus nullable completion; completion uses `EndedGame`. Failed transitions return no results. Start uses the same opening helper. Existing open/reveal wrappers retain their useful contracts. Snapshot/reveal/completion share persisted-result and competition-ranking builders. No transition publishes events yet.
 
 One Node process can interleave asynchronous requests. All opening, answer, reveal and leave transitions acquire `games FOR UPDATE` first, then round/team locks where needed. Start and join already use that game lock. Answer checks time after acquiring its locks; opening samples time after locking the active roster. Scoring, grades and reveal commit together, including the triggering final answer. Tests supply a clock function; request payloads cannot supply time. PGlite proves persistence/rollback and serialized contenders. The separate PostgreSQL 16 command also verifies independent-connection answer/open/reveal/tick contention and atomic snapshots waiting on scoring; see README for the runnable command and observed evidence.
 
@@ -171,7 +174,7 @@ One Node process can interleave asynchronous requests. All opening, answer, reve
 | Browser `realtime.ts`: event handling | Authenticated stream and current view → ordered view updates. | Apply only authorized/current data according to the agreed synchronization protocol. | Event/snapshot ordering tests, not checks of private reducer internals. |
 | Browser screens in section 8 | Typed view and user actions → visible controls. | Render the correct role/phase, focusable controls, confirmations and helpful failures. | Component behavior and manual phone-sized checks. |
 
-There is deliberately no final `endGame` signature here: PR-12 lacks the endpoint, open-round termination rule and UI contract. Add that function and its tests when those decisions are recorded; completion remains required for release.
+`endGame(gameId, session, db, clock)` in `round-service.ts` authorizes the owning host under the game lock and returns typed `EndedGame`. It force-reveals OPEN through the existing protected grading transition, saves HOST_ENDED metadata, clears next time and returns all-team leaderboard after commit. Repeated end preserves metadata/scores. The private completion helper also serves automatic transitions; there is one grading SQL path. Shared `EndGameSchema` is strict empty-object; completion and snapshot field shapes are defined in contracts. Gameplay controls and realtime delivery remain later slices.
 
 ## 11. One request, end to end
 
