@@ -41,6 +41,9 @@ jobs:
       - run: pnpm --filter @carpool/api test:postgres
         env:
           TEST_DATABASE_URL: postgres://carpool_test:carpool-test-only@localhost:5432/carpool_test
+      - run: pnpm --filter @carpool/api test:migrations
+        env:
+          TEST_DATABASE_URL: postgres://carpool_test:carpool-test-only@localhost:5432/carpool_test
       - run: pnpm --filter @carpool/api exec playwright install --with-deps chromium
       - run: pnpm test:browser
         env:

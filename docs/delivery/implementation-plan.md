@@ -153,36 +153,27 @@ flowchart LR
 - [x] Test `round.started`, `answer.locked`, `round.revealed`, completion and reconnect state transitions, lost answer responses and explicit lifecycle controls.
 - [x] Commit `feat: add live captain gameplay`.
 
-Component verification is delivered. Fresh task review, hosted UI CI and real multi-session browser/phone acceptance remain separate gates; mocks do not establish those observations.
+Component verification, fresh Task 8 review and historical hosted CI passed. Task 9 added actual multi-context Chromium acceptance; physical phone/installed-PWA/cellular checks remain separate gates.
 
 **Done when:** refreshing a question, locked, and results screen restores the correct server state and never exposes a pre-reveal answer key.
 
 ### Task 9: Three-car acceptance verification
 
-**Files:** `game-flow.test.ts`, `docs/testing/manual-three-car-checklist.md`, any defect fixes.  
-**Depends on:** Tasks 7 and 8.  
-**References:** Test specification §§7 and 11; LLD §8 screen behavior.
-
-- [ ] Add an automated flow test for host + three teams + one reveal + equal leaderboard data.
-- [ ] Write and run the manual checklist for passenger-only operation, deadline expiry, refresh/reconnect, left-team behavior, and phone viewport readability.
-- [ ] Fix only defects found by that evidence; rerun all checks.
-- [ ] Commit `test: verify three car game flow`.
-
-**Done when:** the automated flow passes and the dated manual checklist is reviewed.
+Delivered at `ec7b081`: two real Chromium journeys (host/three cars, recovery/reveal/lifecycle; final-slot/two-hour boundary) plus the cleanup failure-path check. The [dated checklist](../testing/manual-three-car-checklist.md) records desktop viewport evidence and explicit physical-phone/PWA/cellular limitations. Fresh task review and [historical hosted CI](https://github.com/pattarapolj/carpool-gaming/actions/runs/37753549147) passed. The existing cap/no-fit nextRoundAt producer concern remains for final broad review; it was not changed in Task 10.
 
 ### Task 10: Production rehearsal
 
-**Files:** Dockerfiles, `.env.example`, deployment guide, README.  
-**Depends on:** Task 9.  
-**References:** HLD technical choices; quality and release guide §§4-8.
+**Files:** root Dockerfile/Compose/env, API bootstrap/migration runner, release tests, [runbook](production-runbook.md), quality guide and README.
 
-- [ ] Add validated environment variables, production Docker builds, and a production-like Compose launch.
-- [ ] Restrict CORS to the configured browser origin; never use `*` with bearer tokens.
-- [ ] Run a two-car game against built containers.
-- [ ] Document migration, health check, environment variables, backups, and the single-process limit.
-- [ ] Commit `chore: document production configuration`.
+- [x] Validate database URL, port, exact production origin and available built assets before listening.
+- [x] Serve built PWA/API/Socket.IO from one unprivileged process; retain development Vite proxy.
+- [x] Apply ordered migrations with transactional journal/checksums/advisory locking; explicitly verify legacy adoption and seed idempotently.
+- [x] Reject untrusted browser origins across HTTP and both live transports while retaining authenticated native clients.
+- [x] Run a real two-car game against built containers, preserve its locked answer across restart and reconnect automatically.
+- [x] Rehearse legacy003 adoption/upgrades and pg_dump/restore into a separate runnable disposable project with stored game/answer evidence.
+- [x] Document fresh install, adoption, upgrades, health, backup/restore, compatible recovery, HTTPS proxy and single-process limit.
 
-**Done when:** the deployment guide can be followed from a fresh checkout to run a working two-car game from built containers.
+Local rehearsal is delivered; fresh scoped/broad review and hosted checks for the resulting release head remain required. No public target/deployment, DNS changes, physical-device acceptance, automatic merge or enforced private-repository protection is claimed.
 
 ## Pull-request checklist
 

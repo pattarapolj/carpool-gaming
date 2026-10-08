@@ -8,4 +8,6 @@ dist
 .env.*
 !.env.example
 coverage
+backups
+output
 *.log

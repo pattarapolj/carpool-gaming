@@ -666,6 +666,50 @@ it("joins rooms before snapshot acquisition so an event during subscribe cannot 
 	}
 });
 
+it("graceful restart permits automatic reconnect and a fresh subscribed snapshot", async () => {
+	const own = await fixture();
+	const shared = { ...storage, end: async () => {} };
+	const first = buildServer(shared);
+	const second = buildServer(shared);
+	const url = await first.listen({ host: "127.0.0.1", port: 0 });
+	const socket = io(url, {
+		auth: { token: own.hostToken },
+		autoConnect: false,
+		transports: ["websocket"],
+		reconnectionDelay: 20,
+		reconnectionDelayMax: 50,
+	});
+	try {
+		const ready = event(socket, "connect");
+		socket.connect();
+		await ready;
+		const initial = LiveSnapshotAckSchema.parse(
+			await socket
+				.timeout(2000)
+				.emitWithAck("game.subscribe", { gameId: own.game.id }),
+		);
+		assert(initial.ok);
+		const disconnected = event(socket, "disconnect");
+		await first.close();
+		expect(await disconnected).toBe("transport close");
+		const reconnected = event(socket, "connect");
+		await second.listen({ host: "127.0.0.1", port: Number(new URL(url).port) });
+		await reconnected;
+		const recovered = LiveSnapshotAckSchema.parse(
+			await socket
+				.timeout(2000)
+				.emitWithAck("game.subscribe", { gameId: own.game.id }),
+		);
+		assert(recovered.ok);
+		expect(recovered.snapshot.game).toEqual(initial.snapshot.game);
+		expect(recovered.snapshot.teams).toEqual(initial.snapshot.teams);
+	} finally {
+		socket.disconnect();
+		await first.close();
+		await second.close();
+	}
+});
+
 it("close drains pending socket auth and snapshots before storage and stops new work", async () => {
 	const own = await fixture();
 	let release = () => {};

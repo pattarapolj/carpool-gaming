@@ -5,12 +5,14 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 RUN pnpm install --frozen-lockfile
 
 COPY apps/api apps/api
+COPY apps/web apps/web
 COPY packages/contracts packages/contracts
-RUN pnpm --filter @carpool/api build
+RUN pnpm build
 
 FROM node:22-slim AS runtime
 

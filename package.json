@@ -2,7 +2,7 @@
 	"name": "carpool-gaming",
 	"private": true,
 	"scripts": {
-		"build": "pnpm --filter @carpool/api build && pnpm --filter @carpool/web build",
+		"build": "pnpm --filter @carpool/api build && pnpm --filter @carpool/web build && node -e \"require('node:fs').cpSync('apps/web/dist','apps/api/dist/apps/api/web',{recursive:true})\"",
 		"dev": "pnpm --parallel --filter @carpool/api --filter @carpool/web dev",
 		"dev:web": "pnpm --filter @carpool/web dev",
 		"lint": "biome check .",
