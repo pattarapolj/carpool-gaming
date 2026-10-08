@@ -126,11 +126,21 @@ async function main() {
 				),
 			);
 		}
-		await control.query(
-			await readFile(
-				new URL("../seeds/questions.sql", import.meta.url),
-				"utf8",
-			),
+		const seed = await readFile(
+			new URL("../seeds/questions.sql", import.meta.url),
+			"utf8",
+		);
+		await control.query(seed);
+		const seeded = (await control.query("SELECT * FROM questions ORDER BY id"))
+			.rows;
+		assert.equal(seeded.length, 24);
+		await control.query(seed);
+		assert.deepEqual(
+			(await control.query("SELECT * FROM questions ORDER BY id")).rows,
+			seeded,
+		);
+		console.log(
+			"PASS 24-question bank loads and reloads without changing rows",
 		);
 
 		{
@@ -463,20 +473,30 @@ async function main() {
 				storage,
 				at(1),
 			);
-			const results = await overlap(gameId, [
-				() => tick(storage, at(60)),
-				() => tick(storage, at(60)),
-			]);
-			assert(results.every((result) => result.status === "fulfilled"));
-			const snapshot = await getGameSnapshot(gameId, sessions[1], storage);
-			assert.equal(snapshot.round?.status, "REVEALED");
-			assert.deepEqual(
-				snapshot.leaderboard.map((team) => team.score),
-				[1, 0],
+			await control.query(
+				"UPDATE questions SET is_active=(id='10000000-0000-4000-8000-000000000001')",
 			);
-			console.log(
-				"PASS overlapping coordinator ticks on independent connections: reveal and points once",
-			);
+			try {
+				const results = await overlap(gameId, [
+					() => tick(storage, at(60)),
+					() => tick(storage, at(60)),
+				]);
+				assert(results.every((result) => result.status === "fulfilled"));
+				const snapshot = await getGameSnapshot(gameId, sessions[1], storage);
+				assert.equal(snapshot.round?.status, "REVEALED");
+				assert.equal(snapshot.game.status, "COMPLETE");
+				assert.equal(snapshot.game.completionReason, "QUESTION_BANK_EXHAUSTED");
+				assert.equal(snapshot.game.nextRoundAt, null);
+				assert.deepEqual(
+					snapshot.leaderboard.map((team) => team.score),
+					[1, 0],
+				);
+				console.log(
+					"PASS overlapping coordinator ticks on independent connections: last-bank completion, reveal and points once",
+				);
+			} finally {
+				await control.query("UPDATE questions SET is_active=true");
+			}
 		}
 		{
 			const createdGame = await createGame(

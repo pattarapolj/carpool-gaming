@@ -135,46 +135,57 @@ it("scores correct, wrong and unanswered teams atomically at the exact deadline"
 
 it("reveals on all answers, scores booleans and closest estimate ties once", async () => {
 	const { gameId, sessions } = await game();
-	for (const [index, values, points] of [
-		[0, ["Jupiter", "Earth", "Earth"], [1, 0, 0]],
-		[1, [true, false, false], [1, 0, 0]],
-		[2, [155, 175, 195], [1, 1, 0]],
-	] as const) {
-		const opened = await engine.openDueRound(gameId, storage, at(index * 300));
-		assert(opened);
-		const id = opened.round.id;
-		const answers = await Promise.all(
-			sessions.map((session, i) =>
-				engine.lockAnswer(
-					id,
-					{ value: values[i] },
-					session,
-					storage,
-					at(index * 300 + 1),
-				),
-			),
-		);
-		expect(answers.filter((answer) => answer.reveal)).toHaveLength(1);
-		const reveal = answers.find((answer) => answer.reveal)?.reveal;
-		assert(reveal);
-		for (let i = 0; i < 3; i++)
-			expect(
-				reveal.results?.find((result) => result.teamId === sessions[i].teamId)
-					?.pointsAwarded,
-			).toBe(points[i]);
-		expect(reveal.nextRoundAt).toBe(
-			index === 2 ? null : at((index + 1) * 300)().toISOString(),
-		);
-		expect(
-			await engine.revealDueRound(id, storage, at(index * 300 + 60)),
-		).toBeNull();
-	}
-	const scores = await db.query<{ score: number }>(
-		"SELECT score FROM car_teams WHERE game_id=$1 ORDER BY name",
-		[gameId],
+	await db.query(
+		"UPDATE questions SET is_active=(id <= '10000000-0000-4000-8000-000000000003')",
 	);
-	expect(scores.rows.map((team) => team.score)).toEqual([3, 1, 0]);
-	expect(await engine.openDueRound(gameId, storage, at(900))).toBeNull();
+	try {
+		for (const [index, values, points] of [
+			[0, ["Jupiter", "Earth", "Earth"], [1, 0, 0]],
+			[1, [true, false, false], [1, 0, 0]],
+			[2, [155, 175, 195], [1, 1, 0]],
+		] as const) {
+			const opened = await engine.openDueRound(
+				gameId,
+				storage,
+				at(index * 300),
+			);
+			assert(opened);
+			const id = opened.round.id;
+			const answers = await Promise.all(
+				sessions.map((session, i) =>
+					engine.lockAnswer(
+						id,
+						{ value: values[i] },
+						session,
+						storage,
+						at(index * 300 + 1),
+					),
+				),
+			);
+			expect(answers.filter((answer) => answer.reveal)).toHaveLength(1);
+			const reveal = answers.find((answer) => answer.reveal)?.reveal;
+			assert(reveal);
+			for (let i = 0; i < 3; i++)
+				expect(
+					reveal.results?.find((result) => result.teamId === sessions[i].teamId)
+						?.pointsAwarded,
+				).toBe(points[i]);
+			expect(reveal.nextRoundAt).toBe(
+				index === 2 ? null : at((index + 1) * 300)().toISOString(),
+			);
+			expect(
+				await engine.revealDueRound(id, storage, at(index * 300 + 60)),
+			).toBeNull();
+		}
+		const scores = await db.query<{ score: number }>(
+			"SELECT score FROM car_teams WHERE game_id=$1 ORDER BY name",
+			[gameId],
+		);
+		expect(scores.rows.map((team) => team.score)).toEqual([3, 1, 0]);
+		expect(await engine.openDueRound(gameId, storage, at(900))).toBeNull();
+	} finally {
+		await db.query("UPDATE questions SET is_active=true");
+	}
 });
 
 it("keeps an unanswered left team in this round but excludes it from the next", async () => {
@@ -373,12 +384,12 @@ it("keeps a locked answer eligible for scoring after the team leaves", async () 
 it("chooses only active unused questions and awards the single closest estimate without numeric overflow", async () => {
 	const { gameId, sessions } = await game(2);
 	await db.query(
-		"UPDATE questions SET is_active=false WHERE type!='ESTIMATE'",
+		"UPDATE questions SET is_active=(id='10000000-0000-4000-8000-000000000003')",
 		[],
 	);
 	try {
 		await db.query(
-			"UPDATE questions SET correct_answer=$1::jsonb WHERE type='ESTIMATE'",
+			"UPDATE questions SET correct_answer=$1::jsonb WHERE id='10000000-0000-4000-8000-000000000003'",
 			[JSON.stringify(-Number.MAX_VALUE)],
 		);
 		const opened = await engine.openDueRound(gameId, storage, at(0));
@@ -406,7 +417,7 @@ it("chooses only active unused questions and awards the single closest estimate 
 		expect(await engine.openDueRound(gameId, storage, at(300))).toBeNull();
 	} finally {
 		await db.query(
-			"UPDATE questions SET correct_answer='165'::jsonb WHERE type='ESTIMATE'",
+			"UPDATE questions SET correct_answer='165'::jsonb WHERE id='10000000-0000-4000-8000-000000000003'",
 			[],
 		);
 		await db.query("UPDATE questions SET is_active=true", []);
