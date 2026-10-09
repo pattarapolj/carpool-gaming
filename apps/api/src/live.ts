@@ -191,7 +191,8 @@ export function createLiveServer(app: FastifyInstance, db: GameDb) {
 		},
 		async close() {
 			closing = true;
-			io.disconnectSockets(true);
+			// Transport close permits automatic reconnect after a process restart.
+			// A Socket.IO server-disconnect packet would disable client reconnection.
 			// Fastify owns HTTP shutdown; io.close() would close that listener a second time.
 			io.engine.close();
 			await io.of("/").adapter.close();

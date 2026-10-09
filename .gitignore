@@ -3,6 +3,7 @@ node_modules/
 dist/
 coverage/
 output/playwright/
+backups/
 *.tsbuildinfo
 *.log
 .env

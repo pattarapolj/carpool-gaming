@@ -4,7 +4,7 @@
 
 **Goal:** Deliver the Carpool Quiz League MVP in small, reviewable changes.
 
-**Progress note (2026-10-08):** Foundation and release work remain partial: workspace/process/build commands, Docker Compose API/PostgreSQL, the PWA and `.github/workflows/ci.yml` are installed. Local PostgreSQL 16.14 checks establish independent-connection locking, post-wait deadlines, scoring rollback and authenticated live delivery. Lobby, round, completion/capacity and live-server behavior are implemented. Passenger gameplay, recovery, lifecycle controls and invite sharing now have component/race-test evidence; actual browser/phone acceptance remains Task 9. [Hosted live-delivery baseline CI](https://github.com/pattarapolj/carpool-gaming/actions/runs/37724585885) passed at `f6bfdc3`; this UI slice awaits fresh review and its own hosted run. Main protection remains unavailable for the current private repository (API 403 requires GitHub Pro or public visibility); no settings were changed. Release/production hosting is not complete. See [README](../../README.md) for evidence and [CONTRIBUTING](../../CONTRIBUTING.md) for the branch workflow.
+**Progress note (2026-10-09):** The MVP backend, settled live synchronization, passenger gameplay/recovery/lifecycle controls, browser acceptance and local production rehearsal are implemented and reviewed. Local October 8 evidence covers 195 ordinary tests, 15 PostgreSQL scenarios, migration safety, three browser tests and built-container restart/backup/restore; see the [dated browser checklist](../testing/manual-three-car-checklist.md), [release evidence](quality-and-release.md#7-release-rehearsal-and-execution) and [runbook](production-runbook.md). The [hosted PR verify run](https://github.com/pattarapolj/carpool-gaming/actions/runs/37885006560) passed at `87472fc`; any subsequent head still requires its own hosted checks and scoped review. Main protection remains unavailable for the current private repository (API 403 requires GitHub Pro or public visibility); no settings were changed. Public hosting and physical-phone/PWA/cellular acceptance remain unperformed, and temporary Docker recovery does not establish permanent host repair. See [CONTRIBUTING](../../CONTRIBUTING.md) for the branch workflow.
 
 The tasks are milestones, not mandatory PR sizes. Deliver one reviewable behavior per PR; a large milestone can take several PRs. Write tests for the next behavior and implement it before expanding to the next. Use the contract decision register before committing to an ambiguous contract.
 
@@ -153,36 +153,27 @@ flowchart LR
 - [x] Test `round.started`, `answer.locked`, `round.revealed`, completion and reconnect state transitions, lost answer responses and explicit lifecycle controls.
 - [x] Commit `feat: add live captain gameplay`.
 
-Component verification is delivered. Fresh task review, hosted UI CI and real multi-session browser/phone acceptance remain separate gates; mocks do not establish those observations.
+Component verification, fresh Task 8 review and historical hosted CI passed. Task 9 added actual multi-context Chromium acceptance; physical phone/installed-PWA/cellular checks remain separate gates.
 
 **Done when:** refreshing a question, locked, and results screen restores the correct server state and never exposes a pre-reveal answer key.
 
 ### Task 9: Three-car acceptance verification
 
-**Files:** `game-flow.test.ts`, `docs/testing/manual-three-car-checklist.md`, any defect fixes.  
-**Depends on:** Tasks 7 and 8.  
-**References:** Test specification §§7 and 11; LLD §8 screen behavior.
-
-- [ ] Add an automated flow test for host + three teams + one reveal + equal leaderboard data.
-- [ ] Write and run the manual checklist for passenger-only operation, deadline expiry, refresh/reconnect, left-team behavior, and phone viewport readability.
-- [ ] Fix only defects found by that evidence; rerun all checks.
-- [ ] Commit `test: verify three car game flow`.
-
-**Done when:** the automated flow passes and the dated manual checklist is reviewed.
+Delivered at `ec7b081`: two real Chromium journeys (host/three cars, recovery/reveal/lifecycle; final-slot/two-hour boundary) plus the cleanup failure-path check. The [dated checklist](../testing/manual-three-car-checklist.md) records desktop viewport evidence and explicit physical-phone/PWA/cellular limitations. Fresh task review and [historical hosted CI](https://github.com/pattarapolj/carpool-gaming/actions/runs/37753549147) passed. Final review accepted the existing cap/no-fit `nextRoundAt` boundary behavior; contracts section 8 clarifies that it can represent final waiting/completion rather than another playable question.
 
 ### Task 10: Production rehearsal
 
-**Files:** Dockerfiles, `.env.example`, deployment guide, README.  
-**Depends on:** Task 9.  
-**References:** HLD technical choices; quality and release guide §§4-8.
+**Files:** root Dockerfile/Compose/env, API bootstrap/migration runner, release tests, [runbook](production-runbook.md), quality guide and README.
 
-- [ ] Add validated environment variables, production Docker builds, and a production-like Compose launch.
-- [ ] Restrict CORS to the configured browser origin; never use `*` with bearer tokens.
-- [ ] Run a two-car game against built containers.
-- [ ] Document migration, health check, environment variables, backups, and the single-process limit.
-- [ ] Commit `chore: document production configuration`.
+- [x] Validate database URL, port, exact production origin and available built assets before listening.
+- [x] Serve built PWA/API/Socket.IO from one unprivileged process; retain development Vite proxy.
+- [x] Apply ordered migrations with transactional journal/checksums/advisory locking; explicitly verify legacy adoption and seed idempotently.
+- [x] Reject untrusted browser origins across HTTP and both live transports while retaining authenticated native clients.
+- [x] Run a real two-car game against built containers, preserve its locked answer across restart and reconnect automatically.
+- [x] Rehearse legacy003 adoption/upgrades and pg_dump/restore into a separate runnable disposable project with stored game/answer evidence.
+- [x] Document fresh install, adoption, upgrades, health, backup/restore, compatible recovery, HTTPS proxy and single-process limit.
 
-**Done when:** the deployment guide can be followed from a fresh checkout to run a working two-car game from built containers.
+Local rehearsal and scoped/broad review are complete; [hosted PR checks](https://github.com/pattarapolj/carpool-gaming/actions/runs/37885006560) passed at `87472fc`. Subsequent heads require their own hosted checks and scoped review. No public target/deployment, DNS changes, physical-device acceptance, automatic merge, permanent Docker-host repair or enforced private-repository protection is claimed.
 
 ## Pull-request checklist
 

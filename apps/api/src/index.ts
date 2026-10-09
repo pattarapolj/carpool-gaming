@@ -1,9 +1,21 @@
-import { buildServer } from "./server";
+import { loadMigrations, migrate, seed } from "./migrations";
+import { productionConfig } from "./production";
+import { buildServer, createPostgresDb } from "./server";
 
 async function main() {
-	const app = buildServer(undefined, { logger: true });
-	const port = Number(process.env.PORT ?? 3000);
-	const host = process.env.HOST ?? "127.0.0.1";
+	const config = await productionConfig(process.env);
+	process.env.FRONTEND_ORIGIN = config.origin;
+	const db = createPostgresDb({ connectionString: config.connectionString });
+	try {
+		await migrate(db, await loadMigrations());
+		await seed(db);
+	} catch {
+		await db.end();
+		throw new Error(
+			"Database initialization failed; verify migrations and connection configuration",
+		);
+	}
+	const app = buildServer(db, { logger: true }, config.webRoot);
 	const shutdown = () => {
 		void app.close().catch((error: unknown) => {
 			app.log.error(error, "Failed to close the API server");
@@ -15,12 +27,15 @@ async function main() {
 	process.once("SIGTERM", shutdown);
 
 	try {
-		await app.listen({ host, port });
-	} catch (error) {
-		app.log.error(error, "Failed to start the API server");
+		await app.listen({ host: config.host, port: config.port });
+	} catch {
+		app.log.error("Failed to start the API server");
 		await app.close();
 		process.exitCode = 1;
 	}
 }
 
-void main();
+void main().catch((error: unknown) => {
+	console.error(error instanceof Error ? error.message : "Startup failed");
+	process.exitCode = 1;
+});

@@ -1,14 +1,14 @@
 # Carpool Quiz League — Low-Level Design
 
-**Status:** Detailed design with proposed function interfaces and explicitly pending behavior decisions.  
+**Status:** Detailed design with settled MVP behavior and implemented module responsibilities.
 **Depends on:** [High-level design](design.md) and [contracts](contracts.md).  
 **Implemented by:** [Implementation plan](../delivery/implementation-plan.md)
 
-**Implementation status:** This is the intended MVP blueprint, not a report of working features. See [README](../../README.md) for verified current behavior. The decisions below still need agreement before their affected features are implemented.
+**Implementation status:** The MVP backend, live delivery and passenger UI are implemented and reviewed. See [README](../../README.md), the [browser checklist](../testing/manual-three-car-checklist.md) and [release evidence](../delivery/quality-and-release.md#7-release-rehearsal-and-execution) for verified behavior and remaining external acceptance limits.
 
 ### Decisions to settle before implementation
 
-The [contract decision register](contracts.md#10-decisions-to-settle-before-implementation) owns unresolved behavior, including reconnect. Completion/capacity, leave, duplicate rejection, protected scoring and missed-slot recovery are settled below.
+The [contract decision register](contracts.md#10-decisions-to-settle-before-implementation) records the settled reconnect, completion/capacity, leave, duplicate rejection, protected scoring and missed-slot recovery decisions.
 
 ## 1. Purpose and boundaries
 
@@ -95,7 +95,7 @@ The diagram combines game state (`LOBBY`, `WAITING`, `COMPLETE`) with current-ro
 
 ## 7. Socket.IO behavior
 
-The [live-event contract](contracts.md#9-live-event-contract) owns recipients, payloads and synchronization behavior. Task7b settles the reconnect protocol: rooms precede atomic snapshot; events invalidate and the later UI serializes/reconciles reads. The LLD does not maintain a second copy of the event table.
+The [live-event contract](contracts.md#9-live-event-contract) owns recipients, payloads and synchronization behavior. Rooms precede atomic snapshot; events invalidate and the implemented UI serializes/reconciles reads. The LLD does not maintain a second copy of the event table.
 
 ## 8. Screen behavior
 
@@ -169,12 +169,12 @@ One Node process can interleave asynchronous requests. All opening, answer, reve
 | API `live.ts`: `createLiveServer` | Server plus session lookup → authenticated socket handling. | Authorize game subscriptions; separate private captain events from game-wide events. | Socket auth and game-event integration suites. |
 | API `live.ts`: publication methods | Committed transition and intended audience → event delivery attempt. | Send the contract payload after commit; do not pretend publication is part of the database transaction. | Real-socket rollback silence, permitted recipients and authoritative snapshot recovery. |
 | Browser `api.ts`: request operations for create/join/start/snapshot/answer/leave | Valid user input and current session → typed response or displayable failure. | Use the agreed contract, preserve useful error information and avoid leaking credentials into logs. | Screen interaction tests; real API flow tests. |
-| Browser `session.ts`: `loadSession`, `saveSession`, `clearSession` | Session token and game/role identity ↔ browser persistence. | Keep only session data needed to restore identity; snapshots own game state. Storage mechanism/failure handling to specify when implemented. | Reload/session and reconnect cases through user behavior. |
+| Browser `session.ts`: `loadSession`, `saveSession`, `clearSession` | Session token and game/role identity ↔ browser persistence. | Keep only session identity in localStorage; snapshots own game state. Invalid stored identity is cleared; unavailable storage returns no session on load and surfaces save failure. | Reload/session and reconnect cases through user behavior. |
 | Browser `useGameSnapshot.ts`: `useGameSnapshot` | Current session → authoritative view, connection status and user actions. | Fetch/reconcile snapshots and events; never score or reveal based on local time. Room-before-snapshot, dirty buffering, serialized reads and 15-second reconciliation are required by contracts §9. | Same-round stale event, gap during reconnect and phase restoration tests. |
 | Browser `realtime.ts`: event handling | Authenticated stream and current view → ordered view updates. | Apply only authorized/current data according to the agreed synchronization protocol. | Event/snapshot ordering tests, not checks of private reducer internals. |
 | Browser screens in section 8 | Typed view and user actions → visible controls. | Render the correct role/phase, focusable controls, confirmations and helpful failures. | Component behavior and manual phone-sized checks. |
 
-`endGame(gameId, session, db, clock)` in `round-service.ts` authorizes the owning host under the game lock and returns typed `EndedGame`. It force-reveals OPEN through the existing protected grading transition, saves HOST_ENDED metadata, clears next time and returns all-team leaderboard after commit. Repeated end preserves metadata/scores. The private completion helper also serves automatic transitions; there is one grading SQL path. Shared `EndGameSchema` is strict empty-object; completion and snapshot field shapes are defined in contracts. Gameplay controls remain a later slice; routes consume the committed transition for live delivery.
+`endGame(gameId, session, db, clock)` in `round-service.ts` authorizes the owning host under the game lock and returns typed `EndedGame`. It force-reveals OPEN through the existing protected grading transition, saves HOST_ENDED metadata, clears next time and returns all-team leaderboard after commit. Repeated end preserves metadata/scores. The private completion helper also serves automatic transitions; there is one grading SQL path. Shared `EndGameSchema` is strict empty-object; completion and snapshot field shapes are defined in contracts. Implemented gameplay controls confirm leave/end; routes consume the committed transition for live delivery.
 
 ## 11. One request, end to end
 

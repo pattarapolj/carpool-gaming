@@ -49,6 +49,6 @@ All **27** screenshots were opened and visually inspected. They are ignored loca
 
 No application defect was observed and no production screen, timing, scoring, locking, reveal, seed or shared-contract code changed. Harness synchronization defects encountered during setup are recorded in the implementation report.
 
-The final-slot producer ambiguity remains: `nextRoundAt` can represent a hard-limit closure boundary rather than a promise of another playable question. The existing UI handles that observed boundary neutrally. This run proves the fitting last window and its completion; it does not settle every delayed/no-fit producer schedule interpretation.
+The [completion contract](../specs/contracts.md#8-other-game-operations) clarifies that `nextRoundAt` is a scheduling boundary: it can represent hard-limit closure or remain overdue during a final no-fit gap, without promising another playable question. The existing UI handles the observed hard-limit boundary neutrally. This October 8 run proves the fitting last window and its completion; it did not exercise every delayed/no-fit schedule.
 
 Unverified here: physical-device tap accuracy, mobile OS share sheets/clipboard permissions, installed PWA/service-worker behavior, cellular loss/latency, and passenger/driver use in a moving vehicle. Native controls and desktop Chromium keyboard behavior were exercised; lifecycle confirmations are the app's HTML controls, not OS confirmation dialogs.

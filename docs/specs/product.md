@@ -137,10 +137,10 @@ These IDs identify the product intent above. They are stable references for desi
 | PR-05 | A captain locks one immutable answer for their team. | Unauthorized/invalid/late attempts fail; duplicates cannot replace the answer. |
 | PR-06 | The documented scoring rules determine points. | Correct choices, booleans, closest-number ties and unanswered teams. |
 | PR-07 | Reveal is fair and scores are applied once. | All expected answers or expiry trigger results without duplicate points. |
-| PR-08 | Refresh/reconnect restores the authoritative state. | Current phase, own answer and results survive reconnect. Synchronization detail pending. |
+| PR-08 | Refresh/reconnect restores the authoritative state. | Current phase, own answer and results survive reconnect. Rooms precede atomic snapshots; events invalidate serialized reads with 15-second reconciliation. |
 | PR-09 | Sessions and unrevealed answers remain private. | Roles and game isolation enforced; no credentials/hashes/answer keys in inappropriate views. |
 | PR-10 | Leaving cannot force an early reveal. | Open-round participant count is unchanged; explicit leave immediately prevents new answers and excludes future participation. |
 | PR-11 | Passengers can operate the app without driver screen use. | Mobile readability, focus, adequate touch targets and confirmation. |
-| PR-12 | Games respect the first-release limits and reach completion. | Up to 20 ACTIVE cars with serialized admission; idempotent owning-host end; two-hour limit; bank exhaustion/no-ACTIVE completion. Backend policy settled in contracts section 8; gameplay UI/live delivery remain pending. |
+| PR-12 | Games respect the first-release limits and reach completion. | Up to 20 ACTIVE cars with serialized admission; idempotent owning-host end; two-hour limit; bank exhaustion/no-ACTIVE completion. Backend policy, gameplay UI and live delivery are implemented and reviewed. |
 
-PR-08 retains an unresolved live synchronization protocol. PR-12 backend completion/capacity behavior is settled; this does not claim final UI/live release acceptance.
+PR-08 synchronization and PR-12 completion are settled in contracts sections 8–9. The [browser checklist](../testing/manual-three-car-checklist.md) and [release evidence](../delivery/quality-and-release.md#7-release-rehearsal-and-execution) record verified behavior and hosted checks; physical-phone/PWA/cellular and public-target acceptance remain unperformed.

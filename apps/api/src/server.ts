@@ -1,3 +1,4 @@
+import fastifyStatic from "@fastify/static";
 import Fastify, {
 	type FastifyInstance,
 	type FastifyServerOptions,
@@ -11,9 +12,20 @@ import type { GameDb } from "./services/games-services";
 export function buildServer(
 	db: GameDb = createPostgresDb(),
 	options: FastifyServerOptions = {},
+	webRoot?: string,
 ): FastifyInstance {
 	const app = Fastify(options);
 	const live = createLiveServer(app, db);
+	app.addHook("onRequest", async (request, reply) => {
+		const origin = request.headers.origin;
+		if (
+			origin &&
+			origin !== (process.env.FRONTEND_ORIGIN ?? "http://localhost:5173")
+		) {
+			return reply.code(403).send({ error: "Origin not allowed" });
+		}
+	});
+	if (webRoot) app.register(fastifyStatic, { root: webRoot, maxAge: 0 });
 	let timer: ReturnType<typeof setInterval> | undefined;
 	let running: Promise<unknown> | undefined;
 	app.addHook("onListen", async () => {
