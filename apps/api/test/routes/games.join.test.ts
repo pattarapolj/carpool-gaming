@@ -25,6 +25,8 @@ describe("POST /v1/games/:joinCode/teams", () => {
 					};
 				}
 
+				if (sql.includes("bool_or"))
+					return { rows: [{ count: "0", duplicate: false }] };
 				if (sql.includes("INSERT INTO car_teams")) {
 					writes.push({ sql, values });
 					return {
@@ -131,6 +133,8 @@ describe("POST /v1/games/:joinCode/teams", () => {
 								],
 							};
 						}
+						if (sql.includes("bool_or"))
+							return { rows: [{ count: "0", duplicate: false }] };
 						if (sql.includes("INSERT INTO car_teams")) {
 							return {
 								rows: [
@@ -159,7 +163,7 @@ describe("POST /v1/games/:joinCode/teams", () => {
 
 			expect(response.statusCode).toBe(201);
 			expect(transactionCalls).toBe(1);
-			expect(transactionQueries).toHaveLength(2);
+			expect(transactionQueries).toHaveLength(3);
 			expect(transactionQueries[0]).toMatch(/FOR UPDATE/i);
 		} finally {
 			await app.close();

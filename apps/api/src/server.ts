@@ -13,7 +13,7 @@ export function buildServer(
 ): FastifyInstance {
 	const app = Fastify(options);
 	let timer: ReturnType<typeof setInterval> | undefined;
-	let running: Promise<void> | undefined;
+	let running: Promise<unknown> | undefined;
 	app.addHook("onListen", async () => {
 		timer = setInterval(() => {
 			if (running) return;

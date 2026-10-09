@@ -6,8 +6,13 @@ import { tick } from "../src/coordinator";
 import { buildServer, createPostgresDb } from "../src/server";
 import type { GameDb } from "../src/services/auth";
 import { hashToken, type Session } from "../src/services/auth";
-import { getGameSnapshot } from "../src/services/games-services";
 import {
+	createGame,
+	getGameSnapshot,
+	joinGame,
+} from "../src/services/games-services";
+import {
+	endGame,
 	lockAnswer,
 	openDueRound,
 	revealDueRound,
@@ -398,7 +403,12 @@ async function main() {
 			]);
 			let reading: ReturnType<typeof getGameSnapshot> | undefined;
 			try {
-				await ready;
+				await Promise.race([
+					ready,
+					scoring.then(() =>
+						assert.fail("Scoring finished before transition readiness"),
+					),
+				]);
 				reading = getGameSnapshot(gameId, sessions[0], storage);
 				await waiting(1);
 				const before = await control.query(
@@ -461,6 +471,204 @@ async function main() {
 			console.log(
 				"PASS overlapping coordinator ticks on independent connections: reveal and points once",
 			);
+		}
+		{
+			const createdGame = await createGame(
+				{ name: "Final slot", roundIntervalSeconds: 300 },
+				storage,
+			);
+			for (let i = 0; i < 19; i++)
+				await joinGame(
+					createdGame.game.joinCode,
+					{ name: `Car ${i}` },
+					storage,
+				);
+			const contenders = await overlap(createdGame.game.id, [
+				() => joinGame(createdGame.game.joinCode, { name: "Slot A" }, storage),
+				() => joinGame(createdGame.game.joinCode, { name: "Slot B" }, storage),
+			]);
+			assert.equal(
+				contenders.filter((result) => result.status === "fulfilled").length,
+				1,
+			);
+			const rejected = contenders.find(
+				(result) => result.status === "rejected",
+			);
+			assert(rejected?.status === "rejected");
+			assert.equal(rejected.reason.code, "GAME_FULL");
+			const teams = await control.query(
+				"SELECT count(*)::int AS count FROM car_teams WHERE game_id=$1 AND status='ACTIVE'",
+				[createdGame.game.id],
+			);
+			assert.equal(teams.rows[0].count, 20);
+			console.log(
+				"PASS competing independent-connection lobby joins: final slot admitted once, excess GAME_FULL",
+			);
+		}
+		for (const endFirst of [false, true]) {
+			const { gameId, sessions } = await game();
+			const opened = await openDueRound(gameId, storage, at(0));
+			assert(opened);
+			await lockAnswer(
+				opened.round.id,
+				{ value: "Jupiter" },
+				sessions[0],
+				storage,
+				at(1),
+			);
+			const host: Session = { gameId, role: "HOST" };
+			const ending = () => endGame(gameId, host, storage, at(59));
+			const answer = () =>
+				lockAnswer(
+					opened.round.id,
+					{ value: "Jupiter" },
+					sessions[1],
+					storage,
+					at(59),
+				);
+			const deadline = () => revealDueRound(opened.round.id, storage, at(60));
+			const results = await overlap<unknown>(
+				gameId,
+				endFirst ? [ending, answer, deadline] : [answer, deadline, ending],
+			);
+			assert.equal(results[endFirst ? 0 : 2].status, "fulfilled");
+			assert.equal(
+				results[endFirst ? 1 : 0].status,
+				endFirst ? "rejected" : "fulfilled",
+			);
+			const final = await getGameSnapshot(gameId, host, storage);
+			assert.equal(final.game.status, "COMPLETE");
+			assert.equal(final.game.completionReason, "HOST_ENDED");
+			assert.equal(final.round?.status, "REVEALED");
+			assert.equal(final.game.nextRoundAt, null);
+			assert.deepEqual(
+				final.leaderboard.map((team) => team.score),
+				endFirst ? [1, 0] : [1, 1],
+			);
+			assert.deepEqual(await endGame(gameId, host, storage, at(100)), {
+				game: {
+					id: gameId,
+					status: "COMPLETE",
+					completedAt: final.game.completedAt,
+					completionReason: "HOST_ENDED",
+				},
+				leaderboard: final.leaderboard,
+			});
+			console.log(
+				`PASS host end/final-answer/deadline overlap (${endFirst ? "end" : "answer"} first): completion durable, points once`,
+			);
+		}
+		{
+			const { gameId, sessions } = await game();
+			const opened = await openDueRound(gameId, storage, at(0));
+			assert(opened);
+			await control.query("UPDATE rounds SET ends_at=$2 WHERE id=$1", [
+				opened.round.id,
+				at(7300)(),
+			]);
+			let now = at(7199.999)();
+			const [result] = await overlap(
+				gameId,
+				[
+					() =>
+						lockAnswer(
+							opened.round.id,
+							{ value: "Jupiter" },
+							sessions[0],
+							storage,
+							() => now,
+						),
+				],
+				async () => {
+					now = at(7200)();
+				},
+			);
+			assert(result.status === "rejected");
+			assert.equal(result.reason.code, "ROUND_EXPIRED");
+			await tick(storage, at(7200));
+			const final = await getGameSnapshot(gameId, sessions[0], storage);
+			assert.equal(final.game.completionReason, "TIME_LIMIT");
+			assert.equal(final.round?.status, "REVEALED");
+			console.log(
+				"PASS two-hour eligibility after real lock wait and forced completion before persisted round deadline",
+			);
+		}
+		{
+			const { gameId, sessions } = await game();
+			const opened = await openDueRound(gameId, storage, at(0));
+			assert(opened);
+			await lockAnswer(
+				opened.round.id,
+				{ value: "Jupiter" },
+				sessions[0],
+				storage,
+				at(1),
+			);
+			let ready = () => {};
+			let release = () => {};
+			const transitionReady = new Promise<void>((resolve) => {
+				ready = resolve;
+			});
+			const gate = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			const gated: GameDb = {
+				...storage,
+				transaction: (run) =>
+					storage.transaction(async (tx) => {
+						const result = await run(tx);
+						ready();
+						await gate;
+						return result;
+					}),
+			};
+			const ending = Promise.allSettled([
+				endGame(gameId, { gameId, role: "HOST" }, gated, at(2)),
+			]);
+			let reading: ReturnType<typeof getGameSnapshot> | undefined;
+			try {
+				await Promise.race([
+					transitionReady,
+					ending.then(() => assert.fail("Ending finished before readiness")),
+				]);
+				reading = getGameSnapshot(gameId, sessions[0], storage);
+				await waiting(1);
+				const before = await control.query(
+					"SELECT g.status AS game_status,g.completed_at,r.status AS round_status,t.score FROM games g JOIN rounds r ON r.game_id=g.id JOIN car_teams t ON t.game_id=g.id WHERE g.id=$1 ORDER BY t.name",
+					[gameId],
+				);
+				assert.deepEqual(before.rows, [
+					{
+						game_status: "WAITING",
+						completed_at: null,
+						round_status: "OPEN",
+						score: 0,
+					},
+					{
+						game_status: "WAITING",
+						completed_at: null,
+						round_status: "OPEN",
+						score: 0,
+					},
+				]);
+				release();
+				const final = await reading;
+				assert.equal(final.game.status, "COMPLETE");
+				assert.equal(final.game.completedAt, at(2)().toISOString());
+				assert.equal(final.round?.status, "REVEALED");
+				assert.deepEqual(
+					final.leaderboard.map((team) => team.score),
+					[1, 0],
+				);
+				assert.equal((await ending)[0].status, "fulfilled");
+				console.log(
+					"PASS completion snapshot waits for atomic grade, reveal, metadata and score commit",
+				);
+			} finally {
+				release();
+				await ending;
+				if (reading) await reading;
+			}
 		}
 	} finally {
 		try {

@@ -236,7 +236,10 @@ function createStartApp(options: StartOptions = {}) {
 			if (sql.includes("COUNT")) {
 				return { rows: [{ count: String(activeTeamCount) }] };
 			}
-			if (sql.includes("UPDATE games")) {
+			if (
+				sql.includes("UPDATE games") ||
+				sql.startsWith("SELECT id,status,started_at")
+			) {
 				return {
 					rows: [
 						{
@@ -279,7 +282,10 @@ describe("startGame transaction boundary", () => {
 					return { rows: [{ id: gameId, status: "LOBBY" }] };
 				}
 				if (sql.includes("COUNT")) return { rows: [{ count: "2" }] };
-				if (sql.includes("UPDATE games")) {
+				if (
+					sql.includes("UPDATE games") ||
+					sql.startsWith("SELECT id,status,started_at")
+				) {
 					return {
 						rows: [
 							{

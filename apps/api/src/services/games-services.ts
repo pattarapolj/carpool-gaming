@@ -4,6 +4,7 @@ import type {
 	CreateGameSchema,
 	GameSnapshot,
 	JoinGameSchema,
+	StartedGame,
 } from "../../../../packages/contracts/src/index";
 import { type GameDb, hashToken, type QueryDb, type Session } from "./auth";
 import {
@@ -33,11 +34,9 @@ type TeamRow = {
 	score: number;
 };
 
-type StartGameRow = {
-	id: string;
-	status: string;
-	startedAt: string;
-	nextRoundAt: string;
+type StartGameRow = Omit<StartedGame["game"], "startedAt" | "nextRoundAt"> & {
+	startedAt: Date | string;
+	nextRoundAt: Date | string | null;
 };
 
 type SnapshotGameRow = {
@@ -48,6 +47,8 @@ type SnapshotGameRow = {
 	roundIntervalSeconds: 300 | 600 | 900;
 	startedAt: Date | string | null;
 	nextRoundAt: Date | string | null;
+	completedAt: Date | string | null;
+	completionReason: GameSnapshot["game"]["completionReason"];
 };
 
 type SnapshotTeamRow = {
@@ -60,7 +61,11 @@ type SnapshotTeamRow = {
 export class GameJoinError extends Error {
 	constructor(
 		readonly statusCode: 404 | 409,
-		readonly code: "GAME_NOT_FOUND" | "GAME_NOT_JOINABLE" | "TEAM_NAME_TAKEN",
+		readonly code:
+			| "GAME_NOT_FOUND"
+			| "GAME_NOT_JOINABLE"
+			| "TEAM_NAME_TAKEN"
+			| "GAME_FULL",
 		message: string,
 	) {
 		super(message);
@@ -160,6 +165,22 @@ export async function joinGame(
 				);
 			}
 
+			const admission = (await transactionDb.query(
+				"SELECT count(*) FILTER (WHERE status='ACTIVE') AS count, bool_or(lower(name)=lower($2)) AS duplicate FROM car_teams WHERE game_id=$1",
+				[game.id, input.name],
+			)) as QueryResult<{ count: string | number; duplicate: boolean }>;
+			if (admission.rows[0]?.duplicate)
+				throw new GameJoinError(
+					409,
+					"TEAM_NAME_TAKEN",
+					"That team name is already taken",
+				);
+			if (Number(admission.rows[0]?.count ?? 0) >= 20)
+				throw new GameJoinError(
+					409,
+					"GAME_FULL",
+					"Game already has 20 active teams",
+				);
 			const teamResult = (await transactionDb.query(
 				"INSERT INTO car_teams (id, game_id, name, captain_token_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, status, score",
 				[teamId, game.id, input.name, captainTokenHash],
@@ -257,16 +278,24 @@ async function performStartGame(
 	}
 
 	const now = new Date();
-	const updatedGame = (await db.query(
+	await db.query(
 		`UPDATE games
 		 SET status = 'WAITING', started_at = $2, next_round_at = $2
 		 WHERE id = $1
 		 RETURNING id, status, started_at AS "startedAt", next_round_at AS "nextRoundAt"`,
 		[gameId, now],
+	);
+	await openDueRoundInTransaction(gameId, db, () => now);
+	const committed = (await db.query(
+		'SELECT id,status,started_at AS "startedAt",next_round_at AS "nextRoundAt" FROM games WHERE id=$1',
+		[gameId],
 	)) as QueryResult<StartGameRow>;
-	const opened = await openDueRoundInTransaction(gameId, db, () => now);
-	if (opened) updatedGame.rows[0].nextRoundAt = opened.nextRoundAt;
-	return updatedGame.rows[0];
+	const started = committed.rows[0];
+	return {
+		...started,
+		startedAt: new Date(started.startedAt).toISOString(),
+		nextRoundAt: toISOString(started.nextRoundAt),
+	};
 }
 
 export async function getGameSnapshot(
@@ -282,7 +311,8 @@ export async function getGameSnapshot(
 		const gameResult = (await tx.query(
 			`SELECT id, name, join_code AS "joinCode", status,
 		        round_interval_seconds AS "roundIntervalSeconds",
-	        started_at AS "startedAt", next_round_at AS "nextRoundAt"
+	        started_at AS "startedAt", next_round_at AS "nextRoundAt",
+	        completed_at AS "completedAt", completion_reason AS "completionReason"
 		 FROM games
 		 WHERE id = $1 FOR SHARE`,
 			[gameId],
@@ -384,6 +414,7 @@ export async function getGameSnapshot(
 				...game,
 				startedAt: toISOString(game.startedAt),
 				nextRoundAt: toISOString(game.nextRoundAt),
+				completedAt: toISOString(game.completedAt),
 			},
 			teams: teamsResult.rows,
 			round,

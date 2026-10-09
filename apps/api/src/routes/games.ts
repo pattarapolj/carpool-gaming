@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 import {
 	CreateGameSchema,
+	EndGameSchema,
 	JoinGameSchema,
 	LeaveGameSchema,
 	StartGameSchema,
@@ -16,7 +17,7 @@ import {
 	joinGame,
 	startGame,
 } from "../services/games-services";
-import { leaveGame, RoundError } from "../services/round-service";
+import { endGame, leaveGame, RoundError } from "../services/round-service";
 import { registerRoundRoutes } from "./rounds";
 
 export const registerGameRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
@@ -24,6 +25,25 @@ export const registerGameRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 	{ db },
 ) => {
 	app.register(registerRoundRoutes, { db });
+	app.post<{ Params: { gameId: string } }>(
+		"/v1/games/:gameId/end",
+		async (request) => {
+			const token = getBearerToken(request.headers.authorization);
+			const session = token ? await resolveSession(token, db) : null;
+			if (!session)
+				throw new RoundError(
+					401,
+					"UNAUTHENTICATED",
+					"A valid bearer token is required",
+				);
+			if (
+				!EndGameSchema.safeParse(request.body === undefined ? {} : request.body)
+					.success
+			)
+				throw new RoundError(422, "VALIDATION_ERROR", "Invalid end request");
+			return endGame(request.params.gameId, session, db);
+		},
+	);
 	app.post<{ Params: { gameId: string } }>(
 		"/v1/games/:gameId/leave",
 		async (request) => {

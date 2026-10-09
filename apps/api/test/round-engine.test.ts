@@ -162,7 +162,9 @@ it("reveals on all answers, scores booleans and closest estimate ties once", asy
 				reveal.results?.find((result) => result.teamId === sessions[i].teamId)
 					?.pointsAwarded,
 			).toBe(points[i]);
-		expect(reveal.nextRoundAt).toBe(at((index + 1) * 300)().toISOString());
+		expect(reveal.nextRoundAt).toBe(
+			index === 2 ? null : at((index + 1) * 300)().toISOString(),
+		);
 		expect(
 			await engine.revealDueRound(id, storage, at(index * 300 + 60)),
 		).toBeNull();
@@ -340,7 +342,7 @@ it("samples the answer clock after lock waiting", async () => {
 	).rejects.toMatchObject({ code: "ROUND_EXPIRED" });
 });
 
-it("safely does nothing without active teams or in a non-playing game", async () => {
+it("completes without active teams and safely does nothing in a non-playing game", async () => {
 	const empty = await game(0);
 	expect(await engine.openDueRound(empty.gameId, storage, at(0))).toBeNull();
 	const { gameId } = await game(1);
