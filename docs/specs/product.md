@@ -97,7 +97,7 @@ No speed bonuses, streaks, or wagers are included. A reviewed question bank supp
 
 The server owns deadlines, answer locking, scores and reveal. It saves durable state before announcing success. A reconnect must restore the authoritative state and must not expose a correct answer before reveal.
 
-The early-reveal participant count is fixed when a round opens; leaving cannot reduce it. Exact leave-versus-disconnect eligibility remains an open contract decision. Teams with no answer receive zero points.
+The early-reveal participant count is fixed when a round opens; leaving cannot reduce it. Explicit leave immediately prevents new answers while preserving any locked answer; disconnect alone does not change eligibility. Teams with no answer receive zero points.
 
 Architecture diagrams, database choices and wire examples belong in [design](design.md), [LLD](lld.md) and [contracts](contracts.md). These documents implement the product requirements; they do not redefine the user need.
 
@@ -139,8 +139,8 @@ These IDs identify the product intent above. They are stable references for desi
 | PR-07 | Reveal is fair and scores are applied once. | All expected answers or expiry trigger results without duplicate points. |
 | PR-08 | Refresh/reconnect restores the authoritative state. | Current phase, own answer and results survive reconnect. Synchronization detail pending. |
 | PR-09 | Sessions and unrevealed answers remain private. | Roles and game isolation enforced; no credentials/hashes/answer keys in inappropriate views. |
-| PR-10 | Leaving cannot force an early reveal. | Open-round participant count is unchanged; exact leave/disconnect eligibility pending. |
+| PR-10 | Leaving cannot force an early reveal. | Open-round participant count is unchanged; explicit leave immediately prevents new answers and excludes future participation. |
 | PR-11 | Passengers can operate the app without driver screen use. | Mobile readability, focus, adequate touch targets and confirmation. |
 | PR-12 | Games respect the first-release limits and reach completion. | Up to 20 cars and two hours; limit enforcement, host end and question-exhaustion contracts pending. |
 
-PR-08, PR-10 and PR-12 have unresolved detailed behavior in the contract decision register. They must not be called fully specified or verified yet.
+PR-08 and PR-12 have unresolved detailed behavior in the contract decision register. They must not be called fully specified or verified yet.

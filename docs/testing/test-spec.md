@@ -200,7 +200,7 @@ The field cases below are acceptance inventory. Once shared-schema unit tests ow
 
 ### `routes/games.leave.test.ts`
 
-**Pending decision:** Resolve the leave-versus-current-round eligibility conflict in contracts §10 before finalizing cases involving answers after leave. Fixed expected-team count and authorization are already specified.
+**Resolved Task 6a:** Explicit leave immediately prevents new answers, retains locked answers and the fixed expected count, and excludes the team from subsequent rounds. Disconnect alone does not change eligibility. Current evidence lives in `routes/rounds.answers.test.ts` and `round-engine.test.ts`.
 
 **Route:** `POST /v1/games/:gameId/leave`  
 **Owns:** leaving future rounds without altering an open round.
@@ -405,7 +405,7 @@ This table is the central traceability map. Requirement IDs come from [product](
 | PR-08, PR-09 | Snapshot contract | `getGameSnapshot` | `games.snapshot`: lobby/open/revealed and own answer only | API/database: server phase restored with permitted fields and no pre-reveal answer key. Complete view schema still needs agreement. |
 | PR-08 | Pending synchronization protocol | `useGameSnapshot`, browser realtime | `realtime`: gap during reconnect and same-round stale event | Component/live integration: no lost current transition or regression to stale state; finalize expectations after decision. |
 | PR-09 | Event recipients | `registerRealtime`, `publishGameEvent` | `socket-auth` and `game-events`: role/game isolation and private lock | Real sockets: authorized members only; private lock reaches its captain; answer key appears only after reveal. |
-| PR-10 | Leave contract; pending eligibility | `leaveGame`, `openDueRound` | `games.leave`: repeat leave, retain current count, next-round eligibility | API/database: documented repeat behavior and preserved count; post-leave answer cases wait for agreement. |
+| PR-10 | Leave contract | `leaveGame`, `openDueRound` | `rounds.answers` and `round-engine`: repeat leave, retain current count, immediate rejection, next-round exclusion | API/database: LEFT cannot submit, locked answers still score, and unanswered former participants remain in current results. |
 | PR-11 | Screen acceptance | Browser screens and request operations | `CreateGameScreen`, `QuestionScreen`, `ResultsScreen` and related screen suites | Component: visible controls/errors, explicit answer confirmation, correct role/phase. |
 | PR-11 | Passenger operation | Screens | Manual three-car/mobile checklist | Manual: focus, readability, touch controls and no driver screen interaction. Record actual device/viewport and observations. |
 | PR-04–PR-09 | End-to-end game loop | API, database, coordinator and real clients | `game-flow`: three cars, one reveal and identical leaderboard | Flow: actual modules agree on content, lock state, reveal and ranking; no mocked game engine. |

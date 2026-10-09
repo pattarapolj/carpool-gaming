@@ -265,6 +265,8 @@ The lobby slice returns the game fields and active teams above so refresh restor
 
 `value` is a listed choice ID for `MULTIPLE_CHOICE`, a boolean for `TRUE_FALSE`, and a finite JSON number for `ESTIMATE`. The server obtains the question from the round; clients cannot choose or send a question ID.
 
+The captain's team ID comes only from token lookup. Extra request fields are stripped by the delivered answer/leave schemas and cannot choose a team or server time. Invalid answer bodies/values return `422 INVALID_ANSWER_VALUE`. A duplicate is rejected without changing its original value or timestamp, including after reveal; no successful-response replay is promised. A final valid answer may atomically trigger reveal, but this HTTP response still contains only the lock confirmation.
+
 | Status | Code | Exact condition |
 |---|---|---|
 | `200` | — | An active captain locks one valid answer before the deadline. |
@@ -287,6 +289,8 @@ The lobby slice returns the game fields and active teams above so refresh restor
 **200 response:** `{ "team": { "id": "…", "status": "LEFT" } }`.
 
 **Acceptance:** it changes only that captain’s team. An open round retains its original `expected_team_count`; future rounds exclude the left team.
+
+Explicit leave immediately prevents new answers (`409 TEAM_LEFT`). Already locked answers remain eligible for scoring; leaving never removes an expected participant or forces early reveal. Network disconnect alone does not change ACTIVE status. The request body may be omitted or `{}`; invalid non-object bodies return `422 VALIDATION_ERROR`, malformed JSON returns `400 MALFORMED_JSON`.
 
 | Status | Code | Exact condition |
 |---|---|---|
@@ -318,12 +322,12 @@ Review findings recorded on 2026-09-05. The proposals in this table are discussi
 
 | Before | Gap or conflict | Decision and acceptance evidence needed |
 |---|---|---|
-| Leave/answer logic | The original design allowed participation until the next round, while the answer error table rejects `LEFT` teams. Disconnect-based exclusion was also proposed without defining presence tracking. | Agree whether leaving prevents an answer now or next round; distinguish explicit leave from network disconnect. Test leave and reconnect during an open round and at the next start. |
+| Leave/answer logic — resolved Task 6a | Explicit leave immediately makes the team ineligible for new submissions; disconnect alone does not. | Keep expected count and prior locked answers; exclude LEFT from future rounds. Persistence tests cover immediate rejection, unanswered results and next-round exclusion. |
 | Reconnect/live UI | Snapshot-then-subscribe can miss a reveal between those operations. Round ID alone cannot distinguish open and revealed states for the same round. | Define a gap-free subscription/snapshot handshake and ordering information, then test an event during reconnection and a stale event for the same round. Do not assume Socket.IO reconnect alone restores all state. |
 | Completion | The state diagram says the host ends a game, but there is no end endpoint, authorization/error contract or host control. The two-hour limit and question exhaustion also lack exact completion rules. | Agree when/how completion occurs, including during an open round and with an empty question bank. Add endpoint/event/UI acceptance and tests before implementing completion. |
-| Answer retries | An earlier example included an idempotency key without defining storage/replay; the current answer contract specifies `409` for a duplicate. | Choose duplicate rejection plus snapshot recovery, or a defined idempotent replay protocol. Unique answers prevent duplicates but do not automatically replay a successful response. |
-| Coordinator/persistence | One transaction and one process alone do not stop overlapping ticks or final-answer requests from applying scoring twice. A unique answer row also does not prevent an UPDATE. | Define a locked or conditional state transition so only one transaction scores a round. Test concurrent contenders and immutable answers, not only sequential retries. |
-| Restart recovery | Fixed scheduling does not say what happens after several intervals are missed. | Agree whether missed rounds are skipped or caught up; test restart after downtime and the resulting deadline/sequence. |
+| Answer retries — resolved Task 6a | Duplicate answers return `409 ANSWER_ALREADY_LOCKED` and never mutate the prior submission. | No idempotent success replay; full snapshot recovery follows with the reconnect slice. |
+| Coordinator/persistence — resolved Task 6a | Game-first row locking serializes open, answer, reveal and leave; a locked OPEN-to-REVEALED transition applies scores once. | Grade/score/reveal failures roll back together. Serialized PGlite contenders pass; independent PostgreSQL connections remain required acceptance evidence. |
+| Restart recovery — resolved Task 6a | Skip missed schedule slots; open one fresh round at server now with its full question window. | Sequence counts delivered rounds, not missed slots. The next time is the first future interval boundary anchored at `started_at`; early reveal never shifts it. No-active-team/exhausted-bank opening is a safe no-op pending completion policy. |
 | Client view definitions | Snapshot and event payloads are abbreviated; same-round ordering, leaderboard tie display and nullable fields are incomplete. | Agree on full public schemas and ordering information, then update fixtures and state-transition tests together. |
 | Session expiry and live-event recovery | Authentication refers to expiry without defining lifetime; a committed transition could fail to broadcast. | Specify lifetime/revocation and how clients recover a missed publication. Preserve safe authentication failure handling and test recovery independently of database rollback. |
 | Capacity enforcement | Product PR-12 says up to 20 cars but does not define excess-team error behavior or concurrent join handling. | Agree on the rejection contract and test the boundary, including concurrent requests for the last available slot. |

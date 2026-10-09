@@ -14,6 +14,7 @@ export type GameDb = QueryDb & {
 export type Session = {
 	gameId: string;
 	role: "HOST" | "CAPTAIN";
+	teamId?: string | null;
 };
 
 type QueryResult<Row> = { rows: Row[] };
@@ -32,11 +33,11 @@ export async function resolveSession(
 	db: GameDb,
 ): Promise<Session | null> {
 	const result = (await db.query(
-		`SELECT id AS "gameId", 'HOST' AS role
+		`SELECT id AS "gameId", 'HOST' AS role, NULL::uuid AS "teamId"
 		 FROM games
 		 WHERE host_token_hash = $1
 		 UNION ALL
-		 SELECT game_id AS "gameId", 'CAPTAIN' AS role
+		 SELECT game_id AS "gameId", 'CAPTAIN' AS role, id AS "teamId"
 		 FROM car_teams
 		 WHERE captain_token_hash = $1
 		 LIMIT 1`,
