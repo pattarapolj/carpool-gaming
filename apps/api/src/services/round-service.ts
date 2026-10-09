@@ -251,6 +251,8 @@ async function openLockedGame(gameId: string, tx: QueryDb, clock: Clock) {
 	};
 }
 
+export const openGameInTransaction = openLockedGame;
+
 export async function revealDueRound(
 	roundId: string,
 	db: GameDb,
@@ -399,6 +401,15 @@ export async function endGame(
 	db: GameDb,
 	clock: Clock = () => new Date(),
 ) {
+	return (await endGameTransition(gameId, session, db, clock)).response;
+}
+
+export async function endGameTransition(
+	gameId: string,
+	session: Session,
+	db: GameDb,
+	clock: Clock = () => new Date(),
+) {
 	return db.transaction(async (tx) => {
 		const games = (await tx.query(
 			"SELECT id,status FROM games WHERE id::text=$1 FOR UPDATE",
@@ -408,7 +419,14 @@ export async function endGame(
 		if (!game) throw new RoundError(404, "GAME_NOT_FOUND", "Game not found");
 		if (session.role !== "HOST" || session.gameId !== gameId)
 			throw new RoundError(403, "FORBIDDEN", "Host access required");
-		if (game.status === "COMPLETE") return completionView(gameId, tx);
+		if (game.status === "COMPLETE")
+			return {
+				response: await completionView(gameId, tx),
+				gameId,
+				opened: null,
+				reveal: null,
+				completion: null,
+			};
 		const rounds = (await tx.query(
 			"SELECT id FROM rounds WHERE game_id=$1 AND status='OPEN'",
 			[gameId],
@@ -420,9 +438,28 @@ export async function endGame(
 				clock,
 				"HOST_ENDED",
 			);
-			if (reveal?.completion) return reveal.completion;
+			if (reveal?.completion)
+				return {
+					response: reveal.completion,
+					gameId,
+					opened: null,
+					reveal,
+					completion: reveal.completion,
+				};
 		}
-		return completeLockedGame(gameId, "HOST_ENDED", tx, clock());
+		const completion = await completeLockedGame(
+			gameId,
+			"HOST_ENDED",
+			tx,
+			clock(),
+		);
+		return {
+			response: completion,
+			gameId,
+			opened: null,
+			reveal: null,
+			completion,
+		};
 	});
 }
 
@@ -495,6 +532,14 @@ export async function leaveGame(
 	session: Session,
 	db: GameDb,
 ): Promise<LeftGame> {
+	return (await leaveGameTransition(gameId, session, db)).response;
+}
+
+export async function leaveGameTransition(
+	gameId: string,
+	session: Session,
+	db: GameDb,
+) {
 	return db.transaction(async (tx) => {
 		const games = (await tx.query(
 			"SELECT id,status FROM games WHERE id::text=$1 FOR UPDATE",
@@ -506,11 +551,20 @@ export async function leaveGame(
 		if (games.rows[0].status === "COMPLETE")
 			throw new RoundError(409, "GAME_COMPLETE", "Game is complete");
 		const teams = (await tx.query(
-			"UPDATE car_teams SET status='LEFT' WHERE id=$1 AND game_id=$2 RETURNING id,status",
+			"UPDATE car_teams SET status='LEFT' WHERE id=$1 AND game_id=$2 AND status!='LEFT' RETURNING id,status",
 			[session.teamId, gameId],
 		)) as Rows<LeftGame["team"]>;
-		if (!teams.rows[0])
+		const existing = teams.rows[0]
+			? teams
+			: ((await tx.query(
+					"SELECT id,status FROM car_teams WHERE id=$1 AND game_id=$2",
+					[session.teamId, gameId],
+				)) as Rows<LeftGame["team"]>);
+		if (!existing.rows[0])
 			throw new RoundError(403, "FORBIDDEN", "Game access required");
-		return { team: teams.rows[0] };
+		return {
+			response: { team: existing.rows[0] },
+			changed: teams.rows.length > 0,
+		};
 	});
 }

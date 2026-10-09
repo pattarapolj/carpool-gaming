@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { Pool } from "pg";
+import { io } from "socket.io-client";
+import {
+	GameCompletedSchema,
+	LiveSnapshotAckSchema,
+	RoundRevealedSchema,
+} from "../../../packages/contracts/src/index";
 import { tick } from "../src/coordinator";
 import { buildServer, createPostgresDb } from "../src/server";
 import type { GameDb } from "../src/services/auth";
@@ -668,6 +674,142 @@ async function main() {
 				release();
 				await ending;
 				if (reading) await reading;
+			}
+		}
+		{
+			const created = await createGame(
+				{ name: "PG live delivery", roundIntervalSeconds: 300 },
+				storage,
+			);
+			const teams: Awaited<ReturnType<typeof joinGame>>[] = [];
+			for (let i = 0; i < 2; i++)
+				teams.push(
+					await joinGame(
+						created.game.joinCode,
+						{ name: `Live car ${i}` },
+						storage,
+					),
+				);
+			const address = await app.listen({ host: "127.0.0.1", port: 0 });
+			const socket = io(address, {
+				auth: { token: created.hostToken },
+				autoConnect: false,
+				reconnection: false,
+				transports: ["websocket"],
+			});
+			const events: string[] = [];
+			const post = (url: string, token: string, payload = {}) =>
+				app.inject({
+					method: "POST",
+					url,
+					headers: { authorization: `Bearer ${token}` },
+					payload,
+				});
+			try {
+				const connected = new Promise<void>((resolve, reject) => {
+					socket.once("connect", resolve);
+					socket.once("connect_error", reject);
+				});
+				socket.connect();
+				await connected;
+				const ack = LiveSnapshotAckSchema.parse(
+					await socket
+						.timeout(2000)
+						.emitWithAck("game.subscribe", { gameId: created.game.id }),
+				);
+				assert(ack.ok);
+				assert.equal(
+					(await post(`/v1/games/${created.game.id}/start`, created.hostToken))
+						.statusCode,
+					200,
+				);
+				const host: Session = { gameId: created.game.id, role: "HOST" };
+				const snapshot = await getGameSnapshot(created.game.id, host, storage);
+				assert(snapshot.round);
+				const roundId = snapshot.round.id;
+				assert.equal(
+					(
+						await post(`/v1/rounds/${roundId}/answers`, teams[0].captainToken, {
+							value: "Jupiter",
+						})
+					).statusCode,
+					200,
+				);
+				socket.on("round.revealed", () => events.push("round.revealed"));
+				socket.on("game.completed", () => events.push("game.completed"));
+				const revealed = new Promise<unknown>((resolve, reject) => {
+					const timer = setTimeout(
+						() => reject(new Error("PG live reveal missing")),
+						5000,
+					);
+					socket.once("round.revealed", (payload) => {
+						clearTimeout(timer);
+						resolve(payload);
+					});
+				});
+				const completed = new Promise<unknown>((resolve, reject) => {
+					const timer = setTimeout(
+						() => reject(new Error("PG live completion missing")),
+						5000,
+					);
+					socket.once("game.completed", (payload) => {
+						clearTimeout(timer);
+						resolve(payload);
+					});
+				});
+				const delivered = Promise.all([revealed, completed]);
+				void delivered.catch(() => {});
+				// Observe real independent row-lock waits before releasing both HTTP contenders.
+				const results = await overlap(created.game.id, [
+					() =>
+						post(`/v1/rounds/${roundId}/answers`, teams[1].captainToken, {
+							value: "Earth",
+						}),
+					() => post(`/v1/games/${created.game.id}/end`, created.hostToken),
+				]);
+				const [answerResult, endResult] = results;
+				assert(
+					answerResult.status === "fulfilled" &&
+						endResult.status === "fulfilled",
+				);
+				assert([200, 409].includes(answerResult.value.statusCode));
+				assert.equal(endResult.value.statusCode, 200);
+				const [revealPayload, completionPayload] = await delivered;
+				const reveal = RoundRevealedSchema.parse(revealPayload);
+				const completion = GameCompletedSchema.parse(completionPayload);
+				assert.equal(reveal.roundId, roundId);
+				assert.deepEqual(
+					reveal.leaderboard.map((team) => team.score),
+					[1, 0],
+				);
+				assert.equal(completion.game.status, "COMPLETE");
+				assert.equal(
+					(
+						await control.query<{ status: string }>(
+							"SELECT status FROM games WHERE id=$1",
+							[created.game.id],
+						)
+					).rows[0].status,
+					"COMPLETE",
+				);
+				assert.equal(
+					(await post(`/v1/games/${created.game.id}/end`, created.hostToken))
+						.statusCode,
+					200,
+				);
+				const recovered = LiveSnapshotAckSchema.parse(
+					await socket
+						.timeout(2000)
+						.emitWithAck("game.snapshot", { gameId: created.game.id }),
+				);
+				assert(recovered.ok);
+				assert.equal(recovered.snapshot.game.status, "COMPLETE");
+				assert.deepEqual(events, ["round.revealed", "game.completed"]);
+				console.log(
+					"PASS real authenticated WebSocket delivers committed reveal/completion once during independent HTTP end/answer contention",
+				);
+			} finally {
+				socket.disconnect();
 			}
 		}
 	} finally {

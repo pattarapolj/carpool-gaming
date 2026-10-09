@@ -194,3 +194,66 @@ export type JoinedGame = z.infer<typeof JoinGameResponseSchema>;
 export type CreateGameInput = z.input<typeof CreateGameSchema>;
 export type JoinGameInput = z.input<typeof JoinGameSchema>;
 export type StartedGame = z.infer<typeof StartGameResponseSchema>;
+
+export const LiveGameRequestSchema = z
+	.object({ gameId: z.string().uuid() })
+	.strict();
+export const LiveErrorSchema = z
+	.object({
+		code: z.enum([
+			"UNAUTHENTICATED",
+			"FORBIDDEN",
+			"VALIDATION_ERROR",
+			"GAME_NOT_FOUND",
+			"INTERNAL_ERROR",
+		]),
+		message: z.string(),
+		requestId: z.string().uuid(),
+	})
+	.strict();
+export const LiveSnapshotAckSchema = z.discriminatedUnion("ok", [
+	z.object({ ok: z.literal(true), snapshot: GameSnapshotSchema }).strict(),
+	z.object({ ok: z.literal(false), error: LiveErrorSchema }).strict(),
+]);
+export const GameUpdatedSchema = GameSnapshotSchema.pick({
+	game: true,
+	teams: true,
+});
+export const RoundStartedSchema = PublicRoundSchema.extend({
+	status: z.literal("OPEN"),
+}).strict();
+export const AnswerLockedSchema = z
+	.object({ roundId: z.string().uuid(), roundEndsAt: z.string().datetime() })
+	.strict();
+export const RoundRevealedSchema = z
+	.object({
+		roundId: z.string().uuid(),
+		revealedAt: z.string().datetime(),
+		correctAnswer: AnswerValueSchema,
+		explanation: z.string(),
+		results: RoundResultsSchema,
+		leaderboard: LeaderboardSchema,
+		nextRoundAt: z.string().datetime().nullable(),
+	})
+	.strict();
+export const GameCompletedSchema = EndGameResponseSchema;
+export type LiveError = z.infer<typeof LiveErrorSchema>;
+export type LiveSnapshotAck = z.infer<typeof LiveSnapshotAckSchema>;
+export type LiveGameRequest = z.infer<typeof LiveGameRequestSchema>;
+export interface ClientToServerEvents {
+	"game.subscribe": (
+		request: LiveGameRequest,
+		ack: (response: LiveSnapshotAck) => void,
+	) => void;
+	"game.snapshot": (
+		request: LiveGameRequest,
+		ack: (response: LiveSnapshotAck) => void,
+	) => void;
+}
+export interface ServerToClientEvents {
+	"game.updated": (payload: z.infer<typeof GameUpdatedSchema>) => void;
+	"round.started": (payload: z.infer<typeof RoundStartedSchema>) => void;
+	"answer.locked": (payload: z.infer<typeof AnswerLockedSchema>) => void;
+	"round.revealed": (payload: z.infer<typeof RoundRevealedSchema>) => void;
+	"game.completed": (payload: z.infer<typeof GameCompletedSchema>) => void;
+}

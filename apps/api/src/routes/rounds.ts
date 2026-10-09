@@ -1,12 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
 import { SubmitAnswerSchema } from "../../../../packages/contracts/src/index";
+import type { LivePublisher } from "../live";
 import { type GameDb, getBearerToken, resolveSession } from "../services/auth";
 import { lockAnswer, RoundError } from "../services/round-service";
 
-export const registerRoundRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
-	app,
-	{ db },
-) => {
+export const registerRoundRoutes: FastifyPluginAsync<{
+	db: GameDb;
+	live: LivePublisher;
+}> = async (app, { db, live }) => {
 	app.post<{ Params: { roundId: string } }>(
 		"/v1/rounds/:roundId/answers",
 		async (request) => {
@@ -25,8 +26,14 @@ export const registerRoundRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 					"INVALID_ANSWER_VALUE",
 					"Invalid answer value",
 				);
-			return (await lockAnswer(request.params.roundId, input.data, session, db))
-				.answer;
+			const locked = await lockAnswer(
+				request.params.roundId,
+				input.data,
+				session,
+				db,
+			);
+			live.publishAnswer(request.params.roundId, session, locked);
+			return locked.answer;
 		},
 	);
 };

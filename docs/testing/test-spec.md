@@ -315,6 +315,8 @@ Also exercise overlapping deadline and final-answer operations against real Post
 | `round_revealed_reaches_every_game_member` | All connected members of that game receive the same reveal and leaderboard. |
 | `game_event_does_not_leak_to_other_game` | A socket in another game receives no event. |
 
+Implemented backend evidence lives in `apps/api/test/live-events.test.ts`: real auth/ack/rooms, both Origin transports, safe/public versus private payloads, rollback silence, final-answer/deadline/host-end/empty-bank transitions, post-commit recovery, subscribe races and pending auth/snapshot shutdown. Browser synchronization checks remain in the later UI slice.
+
 ## 7. Full game-flow test
 
 ### `flows/game-flow.test.ts`
@@ -341,17 +343,17 @@ Use React Testing Library. Test a screen’s visible behavior; do not test its p
 | `QuestionScreen.test.tsx` | Renders prompt and choices; select then confirm is required; successful submit disables controls and renders locked state; invalid submit restores controls. |
 | `LockedScreen.test.tsx` | Shows answer-locked confirmation and deadline; never reveals another team's answer; refresh snapshot restores the same state. |
 | `ResultsScreen.test.tsx` | Shows correct answer, explanation, and same ordered leaderboard data provided by server. |
-| `ReconnectScreen.test.tsx` | Shows reconnect status; retry action re-fetches snapshot then resubscribes. |
+| `ReconnectScreen.test.tsx` | Shows reconnect status; retry reinstalls listeners, connects and subscribes before the acknowledged atomic snapshot. |
 
 ### `apps/web/src/realtime.test.ts`
 
-**Needs decision:** Synchronization order is pending contracts §10. The cases below describe required outcomes, not a prescribed ordering of implementation calls. Finalize inputs and event metadata when the gap-free protocol is agreed.
+**Resolved Task7b:** Contracts §9 specifies room-before-snapshot subscription and events as invalidations. The later UI must serialize/coalesce snapshot reads, buffer dirty events during reads, discard stale responses and reconcile every 15 seconds.
 
 | Test name | Expected behavior |
 |---|---|
-| `synchronizes_snapshot_and_subscription_without_gap` | Pending protocol: an event arriving during synchronization is reflected in the resulting authoritative view. |
+| `synchronizes_snapshot_and_subscription_without_gap` | An event during the snapshot read marks it dirty and causes another authoritative read. |
 | `ignores_event_older_than_loaded_snapshot` | An event for an older round cannot replace the state restored by the snapshot. |
-| `replaces_state_from_typed_server_event` | A current typed event moves the client to its server-owned phase. |
+| `reconciles_from_typed_server_event` | A typed event invalidates state; the serialized snapshot read moves the client to its server-owned phase. |
 
 ## 9. TDD workflow for one behavior
 
@@ -402,8 +404,8 @@ This table is the central traceability map. Requirement IDs come from [product](
 | PR-05 | Deadline and uniqueness | `lockAnswer`, database constraint | `rounds.answers`: deadline boundary and duplicate; `schema`: duplicate answer | API/database: before deadline may lock; at/after deadline returns `422` while still open; duplicate leaves one unchanged row. If already revealed, use `409 ROUND_NOT_OPEN`. |
 | PR-06 | Scoring rules | `scoreAnswers` | `round-service.scoring`: correct/wrong, true/false, estimate ties, unanswered | Unit: exact known point totals; equal closest distances each earn one; unanswered earn zero. |
 | PR-07 | Reveal state transition | `revealDueRound`, `tick` | `coordinator`: all answers, expiry, overlap, failed commit | Integration: one scored transition, fixed next schedule, no event for rolled-back work. |
-| PR-08, PR-09 | Snapshot contract | `getGameSnapshot` | `games.snapshot`: lobby/open/revealed and own answer only | API/database: server phase restored with permitted fields and no pre-reveal answer key. Complete view schema still needs agreement. |
-| PR-08 | Pending synchronization protocol | `useGameSnapshot`, browser realtime | `realtime`: gap during reconnect and same-round stale event | Component/live integration: no lost current transition or regression to stale state; finalize expectations after decision. |
+| PR-08, PR-09 | Snapshot contract | `getGameSnapshot` | `games.snapshot`: lobby/open/revealed and own answer only | API/database: server phase restored with permitted fields and no pre-reveal answer key. COMPLETE retains final all-team leaderboard, latest revealed result and nullable completion metadata. |
+| PR-08 | Contracts §9 synchronization protocol | `useGameSnapshot`, browser realtime | `realtime`: gap during reconnect and same-round stale event | Component/live integration: room-before-snapshot, dirty buffering, serialized reads, no stale-state regression and 15-second reconciliation. |
 | PR-09 | Event recipients | `registerRealtime`, `publishGameEvent` | `socket-auth` and `game-events`: role/game isolation and private lock | Real sockets: authorized members only; private lock reaches its captain; answer key appears only after reveal. |
 | PR-10 | Leave contract | `leaveGame`, `openDueRound` | `rounds.answers` and `round-engine`: repeat leave, retain current count, immediate rejection, next-round exclusion | API/database: LEFT cannot submit, locked answers still score, and unanswered former participants remain in current results. |
 | PR-11 | Screen acceptance | Browser screens and request operations | `CreateGameScreen`, `QuestionScreen`, `ResultsScreen` and related screen suites | Component: visible controls/errors, explicit answer confirmation, correct role/phase. |
