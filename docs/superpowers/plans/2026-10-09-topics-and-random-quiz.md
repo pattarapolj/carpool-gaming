@@ -47,7 +47,7 @@
 - [ ] Run contract and focused create-route tests; expected all pass.
 - [ ] Commit `feat(contracts): define game topic selection`.
 
-### Task 2: Migration, question metadata and reviewed question bank
+### Task 2: Reviewed question bank
 
 **Files:** `apps/api/seeds/questions.sql`; question bank/migration tests; `docs/delivery/question-bank-review.md`.
 
@@ -55,7 +55,7 @@
 
 - [ ] Add seed reload tests proving the new rows are repeat-safe and legacy question IDs/contents stay unchanged.
 - [ ] Run the focused question-bank suite; expected it fails on topic counts and missing content.
-- [ ] Add the forward migration and author/review source-backed, original wording in 25-item topic batches. Preserve existing science IDs/text/source metadata. Verify 25 items per topic, globally unique IDs, no duplicates, valid answer shapes, exact durations, citation reachability, fandom canon and reasoning proofs. Record source and review result per batch.
+- [ ] Author/review source-backed, original wording in 25-item topic batches. Preserve existing science IDs/text/source metadata. Verify 25 items per topic, globally unique IDs, no duplicates, valid answer shapes, exact durations, citation reachability, fandom canon and reasoning proofs. Record source and review result per batch.
 - [ ] Run seed tests twice against PostgreSQL; expected existing rows remain unchanged and every topic has exactly 25 questions.
 - [ ] Commit `feat(content): add the reviewed topic question bank`.
 

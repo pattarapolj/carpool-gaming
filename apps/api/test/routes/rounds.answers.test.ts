@@ -22,6 +22,7 @@ beforeAll(async () => {
 		"001_games.sql",
 		"002_car_teams.sql",
 		"003_round_storage.sql",
+		"006_question_topics.sql",
 	]) {
 		await db.exec(
 			await readFile(

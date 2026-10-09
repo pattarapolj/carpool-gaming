@@ -25,7 +25,7 @@ afterAll(async () => {
 	if (db) await db.close();
 });
 
-it("loads 24 attributed questions with typed keys and preserves rows on reload", async () => {
+it("loads the reviewed 325-question bank with valid topics, windows and typed keys", async () => {
 	const seed = await readFile(
 		new URL("../../seeds/questions.sql", import.meta.url),
 		"utf8",
@@ -38,19 +38,40 @@ it("loads 24 attributed questions with typed keys and preserves rows on reload",
 		source_title: string;
 		source_url: string;
 		is_active: boolean;
+		topic_id: string;
+		answer_window_seconds: number;
 	}>(
-		"SELECT type, choices, correct_answer, source_title, source_url, is_active FROM questions ORDER BY id",
+		"SELECT type, choices, correct_answer, source_title, source_url, is_active, topic_id, answer_window_seconds FROM questions ORDER BY id",
 	);
-	expect(rows).toHaveLength(24);
-	for (const type of ["MULTIPLE_CHOICE", "TRUE_FALSE", "ESTIMATE"]) {
-		expect(rows.filter((row) => row.type === type)).toHaveLength(8);
+	expect(rows).toHaveLength(325);
+	for (const topic of [
+		"world",
+		"thailand",
+		"food",
+		"weird",
+		"nature",
+		"science",
+		"taylor-swift",
+		"breaking-bad",
+		"marvel",
+		"logic",
+		"lateral",
+		"probability",
+		"estimate",
+	]) {
+		const topicRows = rows.filter((row) => row.topic_id === topic);
+		expect(topicRows, `${topic} bank size`).toHaveLength(25);
+		expect(
+			topicRows.every(
+				(row) =>
+					row.answer_window_seconds ===
+					(["logic", "lateral", "probability"].includes(topic) ? 180 : 60),
+			),
+		).toBe(true);
 	}
-	expect(rows.map((row) => row.type)).toEqual(
-		Array(8).fill(["MULTIPLE_CHOICE", "TRUE_FALSE", "ESTIMATE"]).flat(),
-	);
 	for (const row of rows) {
 		expect(row.source_title.trim()).not.toBe("");
-		expect(row.source_url).toMatch(/^https:\/\/science\.nasa\.gov\//);
+		expect(row.source_url).toMatch(/^https:\/\//);
 		expect(row.is_active).toBe(true);
 		if (row.type === "MULTIPLE_CHOICE") {
 			expect(typeof row.correct_answer).toBe("string");
@@ -68,6 +89,8 @@ it("loads 24 attributed questions with typed keys and preserves rows on reload",
 	expect(rows.slice(0, 3)).toEqual([
 		{
 			type: "MULTIPLE_CHOICE",
+			topic_id: "science",
+			answer_window_seconds: 60,
 			choices: ["Earth", "Jupiter", "Neptune", "Saturn"],
 			correct_answer: "Jupiter",
 			source_title: "NASA: Jupiter Facts",
@@ -76,6 +99,8 @@ it("loads 24 attributed questions with typed keys and preserves rows on reload",
 		},
 		{
 			type: "TRUE_FALSE",
+			topic_id: "science",
+			answer_window_seconds: 60,
 			choices: null,
 			correct_answer: true,
 			source_title: "NASA: Sun Facts",
@@ -84,6 +109,8 @@ it("loads 24 attributed questions with typed keys and preserves rows on reload",
 		},
 		{
 			type: "ESTIMATE",
+			topic_id: "science",
+			answer_window_seconds: 60,
 			choices: null,
 			correct_answer: 165,
 			source_title: "NASA: Neptune Facts",
@@ -101,7 +128,7 @@ it("loads 24 attributed questions with typed keys and preserves rows on reload",
 		"10000000-0000-4000-8000-000000000002",
 		"10000000-0000-4000-8000-000000000003",
 	]);
-	expect(new Set(content.map((row) => row.prompt)).size).toBe(24);
+	expect(new Set(content.map((row) => row.prompt)).size).toBe(325);
 	for (const row of content) {
 		expect(row.prompt.trim()).not.toBe("");
 		expect(row.explanation.trim()).not.toBe("");

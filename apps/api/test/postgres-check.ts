@@ -133,14 +133,14 @@ async function main() {
 		await control.query(seed);
 		const seeded = (await control.query("SELECT * FROM questions ORDER BY id"))
 			.rows;
-		assert.equal(seeded.length, 24);
+		assert.equal(seeded.length, 325);
 		await control.query(seed);
 		assert.deepEqual(
 			(await control.query("SELECT * FROM questions ORDER BY id")).rows,
 			seeded,
 		);
 		console.log(
-			"PASS 24-question bank loads and reloads without changing rows",
+			"PASS 325-question bank loads and reloads without changing rows",
 		);
 
 		{

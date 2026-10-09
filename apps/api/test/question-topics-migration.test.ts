@@ -19,7 +19,14 @@ it("upgrades existing games and questions without changing released content, and
 			new URL("../seeds/questions.sql", import.meta.url),
 			"utf8",
 		);
-		await db.exec(seed);
+		// The first seed statement is the released legacy bank. The reviewed topic
+		// rows require migration 006, so load them only after the upgrade below.
+		const firstInsert = seed.indexOf("INSERT INTO questions");
+		const topicBankInsert = seed.indexOf(
+			"INSERT INTO questions",
+			firstInsert + 1,
+		);
+		await db.exec(seed.slice(0, topicBankInsert));
 		const legacy = (await db.query("SELECT * FROM questions ORDER BY id")).rows;
 		expect(legacy).toHaveLength(24);
 		const migration = await readFile(
@@ -45,8 +52,8 @@ it("upgrades existing games and questions without changing released content, and
 		).toEqual(legacy);
 		await db.exec(seed);
 		expect(
-			(await db.query("SELECT * FROM questions ORDER BY id")).rows,
-		).toEqual(upgraded);
+			(await db.query("SELECT count(*)::int AS count FROM questions")).rows,
+		).toEqual([{ count: 325 }]);
 		await db.exec(
 			"INSERT INTO games(id,name,join_code,host_token_hash,round_interval_seconds) VALUES('22222222-2222-4222-8222-222222222222','New legacy caller','NEWOLD','hash',300)",
 		);
