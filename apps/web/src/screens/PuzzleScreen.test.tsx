@@ -34,7 +34,10 @@ const view: PuzzleView = {
 	results: [],
 	selection: { theme: null, themeTeamId: null, formatTeamId: null },
 };
-afterEach(cleanup);
+afterEach(() => {
+	cleanup();
+	vi.unstubAllGlobals();
+});
 function show(puzzles = view, act = vi.fn(async () => true)) {
 	const snapshot = { ...gameSnapshot(), puzzles };
 	render(
@@ -133,5 +136,49 @@ it("lets only the assigned car choose a supported format after the theme", () =>
 	};
 	show(puzzles);
 	expect(screen.getByRole("button", { name: "Picture reveal" })).toBeTruthy();
-	expect(screen.queryByRole("button", { name: "Guess the melody" })).toBeNull();
+	expect(screen.queryByRole("button", { name: "Guess the Song" })).toBeNull();
+});
+
+it("lets passengers retry a failed song clip without losing the puzzle", async () => {
+	let attempts = 0;
+	vi.stubGlobal("fetch", async () =>
+		++attempts === 1
+			? Response.json(
+					{
+						error: {
+							code: "CLIP_UNAVAILABLE",
+							message: "Song clip unavailable. Retry or skip this puzzle.",
+						},
+					},
+					{ status: 503 },
+				)
+			: Response.json({ media: "data:audio/wav;base64,UklGRg==" }),
+	);
+	if (!view.puzzle) throw new Error("Missing fixture puzzle");
+	const music: PuzzleView = {
+		...view,
+		round: { ...view.round, theme: "melodies", format: "MUSIC" },
+		puzzle: { ...view.puzzle, media: "song-clip:2" },
+	};
+	const { container } = render(
+		<PuzzleScreen
+			session={{
+				gameId: gameSnapshot().game.id,
+				role: "HOST",
+				token: "test-token",
+			}}
+			snapshot={{ ...gameSnapshot(), puzzles: music }}
+			receivedAt={performance.now()}
+			onAction={vi.fn(async () => true)}
+			busy={false}
+			disconnected={false}
+		/>,
+	);
+	await screen.findByRole("alert");
+	fireEvent.click(screen.getByRole("button", { name: "Retry song clip" }));
+	await screen.findByText("Your browser cannot play this clip.");
+	expect(container.querySelector("audio")?.getAttribute("src")).toBe(
+		"data:audio/wav;base64,UklGRg==",
+	);
+	expect(screen.getByRole("button", { name: "Skip puzzle" })).toBeTruthy();
 });

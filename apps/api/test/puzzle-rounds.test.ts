@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
 import { PUZZLE_PACKS } from "../../../packages/contracts/src/puzzles";
 import { tick } from "../src/coordinator";
 import { buildServer } from "../src/server";
@@ -8,10 +8,24 @@ import type { GameDb } from "../src/services/auth";
 import { resolveSession } from "../src/services/auth";
 import { catalog } from "../src/services/puzzle-catalog";
 import { puzzleAction } from "../src/services/puzzle-service";
+import * as songProvider from "../src/services/song-preview";
+import { previewFixture } from "./fixtures/song-recording";
 
 let db: PGlite;
 let storage: GameDb;
 let app: ReturnType<typeof buildServer>;
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
+});
+it("requires authentication to load a song clip", async () => {
+	const response = await app.inject({
+		method: "POST",
+		url: "/v1/games/unknown/puzzles/clip",
+		payload: { puzzleId: "unknown" },
+	});
+	expect(response.statusCode).toBe(401);
+});
 beforeAll(async () => {
 	db = new PGlite();
 	for (const file of (await readdir(new URL("../migrations/", import.meta.url)))
@@ -91,6 +105,124 @@ async function answerFor(roundId: string, puzzleId: string) {
 		result.rows[0].puzzle_ids[Number(puzzleId.split("/").at(-1))];
 	return catalog.find((p) => p.id === internalId)?.answerId as string;
 }
+
+it("rejects legacy melody guesses in new song rounds", async () => {
+	const { id, tokens } = await setup("melodies", "MUSIC", 1);
+	const p = (await snapshot(id, tokens[0])).puzzles;
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "guess",
+				roundId: p.round.id,
+				puzzleId: p.puzzle.id,
+				answerId: "song-0",
+			})
+		).statusCode,
+	).toBe(422);
+});
+
+it("serves only each team's unlocked song clip and rejects tampered or stale requests", async () => {
+	vi.stubGlobal("fetch", previewFixture);
+	const { id, tokens } = await setup("melodies", "MUSIC", 2);
+	const other = await setup("melodies", "MUSIC", 1);
+	const p = (await snapshot(id, tokens[0])).puzzles;
+	const clip = (token: string, payload: object = { puzzleId: p.puzzle.id }) =>
+		app.inject({
+			method: "POST",
+			url: `/v1/games/${id}/puzzles/clip`,
+			headers: { authorization: `Bearer ${token}` },
+			payload,
+		});
+	const duration = async (token: string) => {
+		const response = await clip(token);
+		expect(response.statusCode).toBe(200);
+		expect(response.headers["cache-control"]).toBe("no-store");
+		const wav = Buffer.from(response.json().media.split(",")[1], "base64");
+		return wav.readUInt32LE(40) / wav.readUInt32LE(28);
+	};
+	expect(await duration(tokens[0])).toBe(2);
+	expect((await clip(other.tokens[0])).statusCode).toBe(403);
+	expect(
+		(await clip(tokens[0], { puzzleId: p.puzzle.id, seconds: 15 })).statusCode,
+	).toBe(422);
+	const target = await answerFor(p.round.id, p.puzzle.id);
+	const wrong = p.options.filter((o: { id: string }) => o.id !== target);
+	for (let i = 0; i < 4; i++) {
+		expect(
+			(
+				await action(id, tokens[0], {
+					kind: "guess",
+					roundId: p.round.id,
+					puzzleId: p.puzzle.id,
+					answerId: wrong[i].id,
+				})
+			).statusCode,
+		).toBe(200);
+		expect(await duration(tokens[0])).toBe([4, 8, 15, 15][i]);
+	}
+	expect(await duration(tokens[1])).toBe(2);
+	await action(id, tokens[0], {
+		kind: "skip",
+		roundId: p.round.id,
+		puzzleId: p.puzzle.id,
+	});
+	expect((await clip(tokens[0])).statusCode).toBe(409);
+	await db.query(
+		"UPDATE puzzle_rounds SET starts_at=$2,ends_at=$3 WHERE id=$1",
+		[p.round.id, new Date(Date.now() - 10000), new Date(Date.now() - 1000)],
+	);
+	expect((await clip(tokens[1])).statusCode).toBe(409);
+});
+
+it("keeps saved synthesized melody rounds playable", async () => {
+	const { id, tokens } = await setup("melodies", "MUSIC", 1);
+	const p = (await snapshot(id, tokens[0])).puzzles;
+	await db.query("UPDATE puzzle_rounds SET puzzle_ids=$2 WHERE id=$1", [
+		p.round.id,
+		["music-song-0", "music-song-1"],
+	]);
+	const saved = (await snapshot(id, tokens[0])).puzzles;
+	expect(saved.puzzle.media).toMatch(/^data:audio\/wav;base64,/);
+	expect(saved.options.map((o: { id: string }) => o.id)).toEqual([
+		"song-0",
+		"song-1",
+	]);
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "guess",
+				roundId: saved.round.id,
+				puzzleId: saved.puzzle.id,
+				answerId: "song-0",
+			})
+		).statusCode,
+	).toBe(200);
+});
+
+it("offers a recoverable error for unavailable song previews and denies cars that left", async () => {
+	vi.spyOn(songProvider, "songPreview").mockRejectedValue(
+		new Error("Provider unavailable"),
+	);
+	const { id, tokens } = await setup("melodies", "MUSIC", 2);
+	const p = (await snapshot(id, tokens[0])).puzzles;
+	const clip = () =>
+		app.inject({
+			method: "POST",
+			url: `/v1/games/${id}/puzzles/clip`,
+			headers: { authorization: `Bearer ${tokens[1]}` },
+			payload: { puzzleId: p.puzzle.id },
+		});
+	const unavailable = await clip();
+	expect(unavailable.statusCode).toBe(503);
+	expect(unavailable.json().error.code).toBe("CLIP_UNAVAILABLE");
+	await app.inject({
+		method: "POST",
+		url: `/v1/games/${id}/leave`,
+		headers: { authorization: `Bearer ${tokens[1]}` },
+		payload: {},
+	});
+	expect((await clip()).statusCode).toBe(403);
+});
 
 it("opens a timed shared sequence with private attribute feedback, repeat protection and restored skip state", async () => {
 	const { id, tokens } = await setup();
@@ -295,8 +427,7 @@ it.each(
 		const p = (await snapshot(id, tokens[0])).puzzles;
 		if (format === "PICTURE")
 			expect(p.puzzle.media).toMatch(/^data:image\/png;base64,/);
-		if (format === "MUSIC")
-			expect(p.puzzle.media).toMatch(/^data:audio\/wav;base64,/);
+		if (format === "MUSIC") expect(p.puzzle.media).toBe("song-clip:2");
 		const target = await answerFor(p.round.id, p.puzzle.id);
 		expect(
 			(

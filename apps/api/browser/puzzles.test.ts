@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import type { Page } from "playwright";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import {
 	CreateGameResponseSchema,
 	type GameSnapshot,
 	GameSnapshotSchema,
 } from "../../../packages/contracts/src/index";
 import { catalog } from "../src/services/puzzle-catalog";
+import { previewFixture } from "../test/fixtures/song-recording";
 import { browserHarness } from "./harness";
 
 let harness: Awaited<ReturnType<typeof browserHarness>>;
@@ -198,6 +199,10 @@ it("plays a two-car timed round, restores guesses and skipped puzzles, and start
 		await expect
 			.poll(async () => (await snapshot(host)).puzzles?.puzzle?.guesses.length)
 			.toBe(1);
+		// Wait for the revisited screen, since the snapshot endpoint can lead the UI refresh.
+		await host
+			.getByRole("heading", { name: "Puzzle 1", exact: true })
+			.waitFor();
 		await host.getByLabel("Search answers").fill(answer);
 		await host.getByRole("button", { name: "Guess", exact: true }).click();
 		await expect
@@ -259,6 +264,8 @@ it("plays a two-car timed round, restores guesses and skipped puzzles, and start
 }, 60000);
 
 it("decodes and replays progressively longer music clues in Chromium", async () => {
+	// Keep CI independent of provider availability while exercising the real clip endpoint and decoder.
+	vi.stubGlobal("fetch", previewFixture);
 	const context = await harness.browser.newContext({
 		viewport: { width: 390, height: 844 },
 	});
@@ -283,7 +290,7 @@ it("decodes and replays progressively longer music clues in Chromium", async () 
 			player.pause();
 			return player.duration;
 		});
-		expect(duration).toBeGreaterThan(0);
+		expect(duration).toBe(2);
 		const original = await snapshot(page);
 		const answer = await target(original);
 		const wrong = original.puzzles?.options.find((o) => o.name !== answer);
@@ -307,7 +314,7 @@ it("decodes and replays progressively longer music clues in Chromium", async () 
 						.evaluate((audio) => (audio as HTMLAudioElement).duration),
 				{ timeout: 10000 },
 			)
-			.toBeGreaterThan(duration);
+			.toBe(4);
 		await page.locator("audio").evaluate(async (audio) => {
 			const player = audio as HTMLAudioElement;
 			await player.play();
@@ -323,6 +330,7 @@ it("decodes and replays progressively longer music clues in Chromium", async () 
 			fullPage: true,
 		});
 	} finally {
+		vi.unstubAllGlobals();
 		await context.close();
 	}
 }, 30000);

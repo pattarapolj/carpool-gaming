@@ -7,6 +7,7 @@ import {
 } from "../../../../packages/contracts/src/puzzles";
 import type { GameDb, QueryDb, Session } from "./auth";
 import { catalog, clueMedia, entries, feedback } from "./puzzle-catalog";
+import { songPreview } from "./song-preview";
 
 type Rows<T> = { rows: T[] };
 type Round = {
@@ -69,7 +70,10 @@ async function openRound(
 ) {
 	const ids = shuffled(
 		catalog
-			.filter((p) => p.theme === setup.theme && p.format === setup.format)
+			.filter(
+				(p) =>
+					!p.legacy && p.theme === setup.theme && p.format === setup.format,
+			)
 			.map((p) => p.id),
 	);
 	if (!ids.length)
@@ -213,11 +217,17 @@ export async function getPuzzleView(
 		})),
 		options:
 			round.status === "OPEN"
-				? entries[round.theme].map(({ id, name, aliases }) => ({
-						id,
-						name,
-						aliases,
-					}))
+				? entries[round.theme]
+						.filter((e) =>
+							round.puzzle_ids.some(
+								(id) => catalog.find((p) => p.id === id)?.answerId === e.id,
+							),
+						)
+						.map(({ id, name, aliases }) => ({
+							id,
+							name,
+							aliases,
+						}))
 				: [],
 		results: results.map((team, i) => ({
 			teamId: team.team_id,
@@ -235,6 +245,75 @@ export async function getPuzzleView(
 			theme: round.next_theme,
 		},
 	};
+}
+
+export async function loadSongClue(
+	gameId: string,
+	puzzleId: string,
+	session: Session,
+	db: GameDb,
+) {
+	const clue = await db.transaction(async (tx) => {
+		if (session.gameId !== gameId || !session.teamId)
+			throw new PuzzleError(
+				403,
+				"FORBIDDEN",
+				"Your car cannot play in this game",
+			);
+		const game = (
+			(await tx.query(
+				"SELECT status,started_at FROM games WHERE id::text=$1 FOR SHARE",
+				[gameId],
+			)) as Rows<{ status: string; started_at: Date }>
+		).rows[0];
+		const team = (
+			(await tx.query(
+				"SELECT status FROM car_teams WHERE id=$1 AND game_id=$2",
+				[session.teamId, gameId],
+			)) as Rows<{ status: string }>
+		).rows[0];
+		if (team?.status !== "ACTIVE")
+			throw new PuzzleError(403, "TEAM_LEFT", "Your car has left this game");
+		const round = await latest(gameId, tx);
+		if (
+			game?.status !== "WAITING" ||
+			!round ||
+			round.status !== "OPEN" ||
+			Date.now() >= new Date(round.ends_at).getTime() ||
+			Date.now() >= new Date(game.started_at).getTime() + 7200000
+		)
+			throw new PuzzleError(409, "ROUND_CLOSED", "This song round has ended");
+		const progress = (
+			(await tx.query(
+				"SELECT * FROM puzzle_progress WHERE round_id=$1 AND team_id=$2",
+				[round.id, session.teamId],
+			)) as Rows<Progress>
+		).rows[0];
+		if (!progress || puzzleId !== publicPuzzleId(round, progress.current_index))
+			throw new PuzzleError(409, "STALE_PUZZLE", "This puzzle has changed");
+		const puzzle = catalog.find(
+			(p) => p.id === round.puzzle_ids[progress.current_index],
+		);
+		const trackId = entries.melodies.find(
+			(e) => e.id === puzzle?.answerId,
+		)?.trackId;
+		if (puzzle?.format !== "MUSIC" || !trackId)
+			throw new PuzzleError(422, "NOT_A_SONG", "This puzzle has no song clip");
+		const mistakes = (progress.guesses[puzzle.id] ?? []).filter(
+			(g) => g !== puzzle.answerId,
+		).length;
+		return { trackId, seconds: [2, 4, 8, 15][Math.min(3, mistakes)] };
+	});
+	// Network requests and decoding happen after releasing the game lock.
+	try {
+		return { media: await songPreview(clue.trackId, clue.seconds) };
+	} catch {
+		throw new PuzzleError(
+			503,
+			"CLIP_UNAVAILABLE",
+			"Song clip unavailable. Retry or skip this puzzle.",
+		);
+	}
 }
 
 export async function puzzleAction(
@@ -396,7 +475,12 @@ export async function puzzleAction(
 				if (!puzzle)
 					throw new PuzzleError(422, "PUZZLE_NOT_FOUND", "Puzzle unavailable");
 				if (action.kind === "guess") {
-					if (!entries[round.theme].some((e) => e.id === action.answerId))
+					if (
+						!round.puzzle_ids.some(
+							(id) =>
+								catalog.find((p) => p.id === id)?.answerId === action.answerId,
+						)
+					)
 						throw new PuzzleError(
 							422,
 							"INVALID_ANSWER",
