@@ -2,6 +2,7 @@ node_modules/
 .pnpm-store/
 dist/
 coverage/
+output/playwright/
 *.tsbuildinfo
 *.log
 .env
