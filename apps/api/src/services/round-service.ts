@@ -218,11 +218,19 @@ async function openLockedGame(
 		answer_window_seconds: number;
 	}>;
 	const question = questions.rows[0];
+	const unused = question
+		? true
+		: (
+				(await tx.query(
+					"SELECT EXISTS (SELECT 1 FROM questions q WHERE q.is_active AND q.topic_id=ANY($2::text[]) AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.game_id=$1 AND r.question_id=q.id)) AS unused",
+					[gameId, game.selected_topics],
+				)) as Rows<{ unused: boolean }>
+			).rows[0].unused;
 	const reason = timeLimitReached(game.started_at, now)
 		? "TIME_LIMIT"
 		: !teams.rows.length
 			? "NO_ACTIVE_TEAMS"
-			: !question
+			: !unused
 				? "QUESTION_BANK_EXHAUSTED"
 				: null;
 	if (reason)
@@ -374,10 +382,9 @@ async function automaticCompletionReason(
 		`SELECT g.started_at,
 		EXISTS (SELECT 1 FROM car_teams WHERE game_id=$1 AND status='ACTIVE') AS active,
 		EXISTS (SELECT 1 FROM questions q WHERE q.is_active AND q.topic_id=ANY(g.selected_topics)
-			AND q.answer_window_seconds*1000 <= extract(epoch FROM (g.started_at + interval '2 hours' - $2::timestamptz))*1000
 			AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.game_id=g.id AND r.question_id=q.id)) AS unused
 		FROM games g WHERE g.id=$1`,
-		[gameId, now],
+		[gameId],
 	)) as Rows<{ started_at: Date | null; active: boolean; unused: boolean }>;
 	const game = state.rows[0];
 	return timeLimitReached(game.started_at, now)

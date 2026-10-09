@@ -315,9 +315,7 @@ it("coordinator returns the committed completion when its clock crosses the limi
 	const transition = await processDueGame(f.gameId, storage, () =>
 		f.at(++reads === 1 ? 7199.999 : 7200)(),
 	);
-	expect(transition?.completion?.game.completionReason).toBe(
-		"QUESTION_BANK_EXHAUSTED",
-	);
+	expect(transition?.completion?.game.completionReason).toBe("TIME_LIMIT");
 	expect(transition?.reveal?.nextRoundAt).toBeNull();
 });
 
@@ -411,7 +409,7 @@ it("caps ACTIVE lobby cars at 20, retains duplicate precedence, and LEFT frees c
 });
 
 it.each([45, 60])(
-	"does not open a shortened %s-second final window, completes at exactly two hours",
+	"does not open a shortened %s-second final window and waits until two hours",
 	async (window) => {
 		const f = await fixture();
 		assert(f.snapshot.round);
@@ -424,16 +422,28 @@ it.each([45, 60])(
 		expect(
 			(await getGameSnapshot(f.gameId, f.host, storage)).game,
 		).toMatchObject({
-			status: "COMPLETE",
-			completionReason: "QUESTION_BANK_EXHAUSTED",
+			status: "WAITING",
+			completionReason: null,
 		});
 		const transitions = await tick(storage, f.at(7200));
-		expect(transitions).toEqual([]);
+		expect(transitions).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					completion: expect.objectContaining({
+						game: expect.objectContaining({
+							id: f.gameId,
+							completionReason: "TIME_LIMIT",
+							completedAt: f.at(7200)().toISOString(),
+						}),
+					}),
+				}),
+			]),
+		);
 		const final = await getGameSnapshot(f.gameId, f.host, storage);
 		expect(final.game).toMatchObject({
 			status: "COMPLETE",
 			nextRoundAt: null,
-			completionReason: "QUESTION_BANK_EXHAUSTED",
+			completionReason: "TIME_LIMIT",
 		});
 		expect(final.round?.sequence).toBe(1);
 	},

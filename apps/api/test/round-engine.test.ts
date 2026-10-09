@@ -146,16 +146,26 @@ it("does not open a selected question whose full answer window crosses the game 
 	try {
 		const opened = await engine.openDueRound(gameId, storage, at(7200 - 60));
 		expect(opened).toBeNull();
-		const state = await db.query(
-			"SELECT status,completion_reason FROM games WHERE id=$1",
-			[gameId],
-		);
-		expect(state.rows).toEqual([
-			{ status: "COMPLETE", completion_reason: "QUESTION_BANK_EXHAUSTED" },
-		]);
+		expect(
+			(
+				await db.query(
+					"SELECT status,completion_reason FROM games WHERE id=$1",
+					[gameId],
+				)
+			).rows,
+		).toEqual([{ status: "WAITING", completion_reason: null }]);
 		expect(
 			(await db.query("SELECT id FROM rounds WHERE game_id=$1", [gameId])).rows,
 		).toEqual([]);
+		expect(await engine.openDueRound(gameId, storage, at(7200))).toBeNull();
+		expect(
+			(
+				await db.query(
+					"SELECT status,completion_reason FROM games WHERE id=$1",
+					[gameId],
+				)
+			).rows,
+		).toEqual([{ status: "COMPLETE", completion_reason: "TIME_LIMIT" }]);
 	} finally {
 		await db.query(
 			"UPDATE questions SET answer_window_seconds=60,is_active=true",
