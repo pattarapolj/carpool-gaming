@@ -17,8 +17,8 @@ Mixed Topics combines the host's selected topics; it has no duplicate question b
 | nature | Animals & Nature | Animals, ecosystems and natural phenomena |
 | science | Science & Space | Everyday science and astronomy |
 | taylor-swift | Taylor Swift | Her released music and career; no lyric excerpts |
-| breaking-bad | Breaking Bad | The series itself; spoiler scope pending user choice |
-| marvel | Marvel | MCU or comics scope pending user choice |
+| breaking-bad | Breaking Bad | The full television series; full-series spoilers |
+| marvel | Marvel | Marvel Cinematic Universe films |
 | logic | Logic & Clever Strategies | Binary/bottles, hats/parity, deduction, weighing and coordination |
 | lateral | Lateral Thinking | Fully specified puzzles with an objectively gradeable solution |
 | probability | Probability Puzzles | Clear assumptions, probability and combinatorics |
@@ -66,4 +66,4 @@ Exercise the host picker and restored lobby selection in Chromium, including a t
 
 ## Review gate
 
-User review of this written design and the pending fandom scope choice are required before writing the implementation plan. The plan will then be reviewed and its execution method selected, as required by the brainstorming skill. No implementation has begun.
+The default fandom scope is the full Breaking Bad television series and Marvel Cinematic Universe films, following the recommendation in the review prompt. Review the implementation plan before code changes begin. No implementation has begun.
