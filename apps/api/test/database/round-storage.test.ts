@@ -32,6 +32,7 @@ it("loads the reviewed 325-question bank with valid topics, windows and typed ke
 	);
 	await db.exec(seed);
 	const { rows } = await db.query<{
+		id: string;
 		type: string;
 		choices: string[] | null;
 		correct_answer: string | boolean | number;
@@ -41,7 +42,7 @@ it("loads the reviewed 325-question bank with valid topics, windows and typed ke
 		topic_id: string;
 		answer_window_seconds: number;
 	}>(
-		"SELECT type, choices, correct_answer, source_title, source_url, is_active, topic_id, answer_window_seconds FROM questions ORDER BY id",
+		"SELECT id, type, choices, correct_answer, source_title, source_url, is_active, topic_id, answer_window_seconds FROM questions ORDER BY id",
 	);
 	expect(rows).toHaveLength(325);
 	for (const topic of [
@@ -86,8 +87,20 @@ it("loads the reviewed 325-question bank with valid topics, windows and typed ke
 				expect(Number.isFinite(row.correct_answer)).toBe(true);
 		}
 	}
+	const answerPositionCounts = [0, 0, 0, 0];
+	for (const row of rows.filter(
+		(row) => row.id.startsWith("20000000-") && row.type === "MULTIPLE_CHOICE",
+	)) {
+		const position = row.choices?.indexOf(String(row.correct_answer)) ?? -1;
+		expect(position, `answer position for ${row.id}`).toBeGreaterThanOrEqual(0);
+		answerPositionCounts[position] += 1;
+	}
+	expect(
+		Math.max(...answerPositionCounts) - Math.min(...answerPositionCounts),
+	).toBeLessThanOrEqual(1);
 	expect(rows.slice(0, 3)).toEqual([
 		{
+			id: "10000000-0000-4000-8000-000000000001",
 			type: "MULTIPLE_CHOICE",
 			topic_id: "science",
 			answer_window_seconds: 60,
@@ -98,6 +111,7 @@ it("loads the reviewed 325-question bank with valid topics, windows and typed ke
 			is_active: true,
 		},
 		{
+			id: "10000000-0000-4000-8000-000000000002",
 			type: "TRUE_FALSE",
 			topic_id: "science",
 			answer_window_seconds: 60,
@@ -108,6 +122,7 @@ it("loads the reviewed 325-question bank with valid topics, windows and typed ke
 			is_active: true,
 		},
 		{
+			id: "10000000-0000-4000-8000-000000000003",
 			type: "ESTIMATE",
 			topic_id: "science",
 			answer_window_seconds: 60,

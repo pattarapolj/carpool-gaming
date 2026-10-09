@@ -26,6 +26,24 @@ The PGlite audit in `apps/api/test/database/round-storage.test.ts` loads all ord
 
 The factual rows retain a specific source title and URL in the seed. Source URLs are reused when several questions rely on the same official topic page. I spot-checked representative links with the browser research tool, including NASA, TAT, UNESCO, Marvel, AMC, Grammy, Australian Museum, NOAA and the Eiffel Tower. Tool errors are not treated as proof that an external site is down; a few sources block automated opening. The updated application test checks URL syntax and source presence but does not perform network requests during CI.
 
+## Corrective content audit
+
+A post-review audit corrected the following individual items while retaining their IDs and topic counts:
+
+| IDs | Correction |
+|---|---|
+| New multiple-choice bank | Rotated stored option order so the keyed answer is evenly distributed among the four positions; the PGlite bank test now asserts the position counts differ by at most one. The original 24 released rows were left unchanged. |
+| 303 | Prompt now requests degrees Celsius (not thousands of degrees); the 5,500°C value rounds to the stored 6,000°C key. |
+| 198, 201 | Corrected the Peter Quill parentage question and cited Marvel’s Ego profile; rewrote the Endgame prompt to ask who inspired the time-travel plan, matching Scott Lang and Marvel’s official recap. |
+| 244, 250, 258 | Specified the frozen-surface constraint; made the postage-stamp prompt describe a letter and envelope; changed the age puzzle to “the day before yesterday” and worked through the dates explicitly. |
+| 221, 232 | Specified infinite repeated visits, recognition, and one-time off-to-on signalling in the switch puzzle. Replaced the repeated wolf/goat/cabbage variant with a distinct eight-ball, two-weighing puzzle and proof. |
+| 90 | Replaced the broad animal distractor question with one asking for the shark eye membrane by name, avoiding frog and crocodilian ambiguity; the cited Smithsonian page describes the membrane in some shark species. |
+| 3, 25 | Kept released question 3 unchanged and replaced the duplicate Petra question 25 with Persepolis in Iran, verified on UNESCO’s site page. |
+| 174, 178 | Replaced question 174’s repeated Hank family relationship with an actor-identification question; question 178 remains the brother-in-law fact. |
+| 18, 175 | Replaced the generic Environment Agency homepage with Visit London’s Thames-through-central-London page. Rewrote 175 to ask Walter’s Heisenberg alias and cited AMC’s explanatory article rather than the unrelated Jesse/El Camino recap. |
+
+Exact duplicate prompts are covered by the automated audit. Broader concept similarity is reviewed manually because automated semantic-duplicate checks would be brittle; the listed duplicate pairs were checked and resolved as above.
+
 Original logic, lateral-thinking and probability puzzles cite this review document as their source and carry the complete proof in the question’s reveal explanation. The document URL becomes public when the change is merged.
 
 ## Known limits
