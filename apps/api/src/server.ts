@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
-import { Pool } from "pg";
+import { Pool, type PoolConfig } from "pg";
 import { registerGameRoutes } from "./routes/games";
 import type { GameDb } from "./services/games-services";
 
@@ -13,8 +13,10 @@ export function buildServer(db: GameDb = createPostgresDb()): FastifyInstance {
 	return app;
 }
 
-function createPostgresDb(): GameDb {
-	const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+export function createPostgresDb(
+	config: PoolConfig = { connectionString: process.env.DATABASE_URL },
+): GameDb {
+	const pool = new Pool(config);
 
 	return {
 		query: (sql, values) => pool.query(sql, values),

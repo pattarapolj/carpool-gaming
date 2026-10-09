@@ -1,10 +1,10 @@
 # Quality, release and maintenance guide
 
-**Purpose:** Make local verification and the future GitHub merge gate explicit. For commits, collaboration and SDLC, read [CONTRIBUTING.md](../../CONTRIBUTING.md).
+**Purpose:** Make local verification, installed CI and hosted merge-gate requirements explicit. For commits, collaboration and SDLC, read [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ## 1. Current implementation versus target
 
-As of 2026-09-24, the API has a process entry point and build/start scripts. Docker Compose runs the API with PostgreSQL and applies the existing migrations when it initializes a new database volume. The browser lobby and lobby snapshot are implemented; snapshot round data, leave, round and realtime behavior, and `.github/workflows/ci.yml` remain pending. The workflow below is a future template, not installed automation. Hosted branch settings have not been configured.
+As of 2026-10-08, the API has a process entry point and build/start scripts. Docker Compose runs the API with PostgreSQL and applies numbered migrations when it initializes a new database volume. The browser lobby, lobby snapshot, answer/leave routes and server round transitions are implemented; full round snapshots, the coordinator, realtime and gameplay screens remain pending. `.github/workflows/ci.yml` is installed. Hosted execution and branch settings have not yet been verified; no complete Foundation or release claim follows from installing a workflow.
 
 Tests live in ordinary source files. CI runs those files on a clean machine after a push; writing a workflow does not create tests or prove unimplemented behavior.
 
@@ -40,46 +40,19 @@ The [README](../../README.md) records the last observed test, lint and typecheck
 6. Push and request review.
 7. Merge after checks and review pass; release separately when ready.
 
-## 4. Foundation CI template
+## 4. Installed Foundation CI
 
-Create `.github/workflows/ci.yml` when delivering foundation CI. This template uses existing scripts and reads pnpm **10.23.0** from root `package.json`, rather than specifying a conflicting pnpm version. [pnpm action setup](https://github.com/pnpm/action-setup) supports this package-manager field.
+The installed [workflow](../../.github/workflows/ci.yml) runs the existing lint, typecheck, test and build scripts, then `pnpm --filter @carpool/api test:postgres`. It runs on pushes and pull requests with `contents: read` permission. Node is pinned to 22; pnpm **10.23.0** comes from root `package.json`; installation uses `--frozen-lockfile`. Current official docs specify [checkout v7](https://github.com/actions/checkout), [setup-node v7](https://github.com/actions/setup-node) and [pnpm/action-setup v6](https://github.com/pnpm/action-setup). The [GitHub PostgreSQL service guide](https://docs.github.com/en/actions/tutorials/use-containerized-services/create-postgresql-service-containers) describes the service port and readiness healthcheck used here.
 
-```yaml
-name: CI
+The `postgres:16` service uses synthetic credentials and the dedicated `carpool_test` database. `pg_isready` must pass before steps start. `test:postgres` requires an explicit `TEST_DATABASE_URL` naming that database with no query parameters/fragments, never falls back to `DATABASE_URL`, isolates migrations/seeds in a generated schema and cleans only that schema. Run it locally using the [README instructions](../../README.md#quality-checks); a real PostgreSQL 16 instance is required. The ordinary Vitest suite remains available without PostgreSQL.
 
-on:
-  pull_request:
-  push:
-    branches: [main]
+Local PostgreSQL 16.14 evidence on 2026-10-08 passed six checks: overlapping same-team HTTP submissions produce one immutable answer and duplicate `409`; deadline reveal/final answer in both lock orders awards once; overlapping openers produce one sequence; an answer waiting on a real row lock rechecks its deadline; failed scoring rolls back answer/grades/scores/reveal and can retry. Contenders use separate pool connections and observed backend lock waits. Capacity admission, realtime publication and production container rehearsal are later work.
 
-permissions:
-  contents: read
-
-jobs:
-  verify:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm test
-```
-
-This template has not run on GitHub. With today's intentionally red tests it will fail; keep those failures visible on the draft branch. Complete feature behavior before marking the corresponding PR ready. Do not add `continue-on-error`, skip failing acceptance tests, or invent a no-op build to satisfy a checklist.
-
-When database tests arrive, add a PostgreSQL 16 service with readiness checking, apply real migrations, and provide a dedicated test database URL. Use synthetic data and prevent cleanup from targeting a development/production database. Tests sharing one database must run serially or use independent schemas.
-
-When build scripts arrive, add `pnpm build` locally and to CI. Verify the built application starts in a smoke test. When the web app arrives, add its actual tests to workspace checks. Until then, neither command is a current requirement that can be claimed as passing.
+Hosted CI has not run for this revision yet. Verify the actual `verify` job after push before merge readiness. Do not add `continue-on-error`, skip failing acceptance tests, or invent no-op checks. A local command run does not prove a hosted workflow passed.
 
 ## 5. Hosted merge gates
 
-Once CI exists, configure `main` to require the `verify` job, resolved review conversations, and **one approval**. Prevent direct pushes and force pushes through the repository's available protection/ruleset settings. A document or workflow alone does not enforce those settings. Availability depends on hosting and plan. See [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
+After hosted CI passes, configure `main` to require the `verify` job, resolved review conversations, and **one approval**. Prevent direct pushes and force pushes through the repository's available protection/ruleset settings. A document or workflow alone does not enforce those settings. Availability depends on hosting and plan. See [GitHub protected branches](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 
 Contract changes require an approving review. Recheck substantial changes after review. CI complements human review; neither replaces acceptance criteria.
 
