@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { loadMigrations } from "../../src/migrations";
 import { buildServer } from "../../src/server";
 
 describe("joining a game with PostgreSQL semantics", () => {
@@ -10,13 +10,8 @@ describe("joining a game with PostgreSQL semantics", () => {
 
 	beforeAll(async () => {
 		db = new PGlite();
-		for (const migrationName of ["001_games.sql", "002_car_teams.sql"]) {
-			const migration = await readFile(
-				new URL(`../../migrations/${migrationName}`, import.meta.url),
-				"utf8",
-			);
-			await db.exec(migration);
-		}
+		for (const migration of await loadMigrations())
+			await db.exec(migration.sql);
 		app = buildServer({
 			query: (sql, values) => db.query(sql, values),
 			end: () => db.close(),

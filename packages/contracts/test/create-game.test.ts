@@ -1,7 +1,82 @@
 import { describe, expect, it } from "vitest";
-import { CreateGameSchema } from "../src";
+import {
+	CreateGameSchema,
+	QUESTION_TOPICS,
+	QuestionTopicIds,
+	QuestionTopicSchema,
+} from "../src";
 
 describe("CreateGameSchema", () => {
+	it("defines exactly the 13 selectable topic IDs and their display names", () => {
+		expect(QUESTION_TOPICS).toEqual({
+			world: "Around the World",
+			thailand: "Thailand",
+			food: "Food & Drinks",
+			weird: "Weird but True",
+			nature: "Animals & Nature",
+			science: "Science & Space",
+			"taylor-swift": "Taylor Swift",
+			"breaking-bad": "Breaking Bad",
+			marvel: "Marvel",
+			logic: "Logic & Clever Strategies",
+			lateral: "Lateral Thinking",
+			probability: "Probability Puzzles",
+			estimate: "Closest Estimate",
+		});
+		for (const id of Object.keys(QUESTION_TOPICS))
+			expect(QuestionTopicSchema.parse(id)).toBe(id);
+		expect(QuestionTopicIds).toEqual(Object.keys(QUESTION_TOPICS));
+	});
+
+	it("accepts all topics and deduplicates explicit selections in their supplied order", () => {
+		const input = { name: "Trip", roundIntervalSeconds: 300 };
+		expect(
+			CreateGameSchema.parse({ ...input, topics: QuestionTopicIds }).topics,
+		).toEqual(QuestionTopicIds);
+		expect(
+			CreateGameSchema.parse({
+				...input,
+				topics: ["science", "world", "science"],
+			}).topics,
+		).toEqual(["science", "world"]);
+	});
+
+	it.each(
+		[[], ["unknown"], ["mixed"], ["Mixed Topics"], ["science", "unknown"]].map(
+			(topics) => ({ topics }),
+		),
+	)("rejects invalid topic selection $topics", ({ topics }) => {
+		expect(
+			CreateGameSchema.safeParse({
+				name: "Trip",
+				roundIntervalSeconds: 300,
+				topics,
+			}).success,
+		).toBe(false);
+	});
+
+	it("defaults omitted topics to all 13 selectable topics", () => {
+		expect(
+			CreateGameSchema.parse({ name: "Trip", roundIntervalSeconds: 300 }),
+		).toMatchObject({
+			topics: [
+				"world",
+				"thailand",
+				"food",
+				"weird",
+				"nature",
+				"science",
+				"taylor-swift",
+				"breaking-bad",
+				"marvel",
+				"logic",
+				"lateral",
+				"probability",
+				"estimate",
+			],
+		});
+	});
+
 	it.each([300, 600, 900])(
 		"accepts supported round interval %j",
 		(roundIntervalSeconds) => {

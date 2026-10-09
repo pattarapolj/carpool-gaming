@@ -1,5 +1,43 @@
 import { z } from "zod";
 
+export const QuestionTopicIds = [
+	"world",
+	"thailand",
+	"food",
+	"weird",
+	"nature",
+	"science",
+	"taylor-swift",
+	"breaking-bad",
+	"marvel",
+	"logic",
+	"lateral",
+	"probability",
+	"estimate",
+] as const;
+export const QuestionTopicSchema = z.enum(QuestionTopicIds);
+export type QuestionTopicId = z.infer<typeof QuestionTopicSchema>;
+export const QUESTION_TOPICS = {
+	world: "Around the World",
+	thailand: "Thailand",
+	food: "Food & Drinks",
+	weird: "Weird but True",
+	nature: "Animals & Nature",
+	science: "Science & Space",
+	"taylor-swift": "Taylor Swift",
+	"breaking-bad": "Breaking Bad",
+	marvel: "Marvel",
+	logic: "Logic & Clever Strategies",
+	lateral: "Lateral Thinking",
+	probability: "Probability Puzzles",
+	estimate: "Closest Estimate",
+} satisfies Record<QuestionTopicId, string>;
+const SelectedTopicsSchema = z
+	.array(QuestionTopicSchema)
+	.min(1)
+	.transform((topics) => [...new Set(topics)])
+	.default([...QuestionTopicIds]);
+
 export const SubmitAnswerSchema = z.object({
 	value: z.union([z.string(), z.boolean(), z.number().finite()]),
 });
@@ -20,6 +58,7 @@ export type LeftGame = z.infer<typeof LeaveGameResponseSchema>;
 
 export const CreateGameSchema = z.object({
 	name: z.string().trim().min(1).max(60),
+	topics: SelectedTopicsSchema,
 	teamName: z.string().trim().min(1).max(60).optional(),
 	roundIntervalSeconds: z.union([
 		z.literal(300),
@@ -155,6 +194,7 @@ export const GameSnapshotSchema = z
 		game: z.object({
 			id: z.string().uuid(),
 			name: z.string(),
+			selectedTopics: SelectedTopicsSchema,
 			joinCode: z.string().length(6),
 			status: z.enum(["LOBBY", "WAITING", "COMPLETE"]),
 			roundIntervalSeconds: z.union([

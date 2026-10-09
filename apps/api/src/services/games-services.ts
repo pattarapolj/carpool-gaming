@@ -1,10 +1,12 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { z } from "zod";
-import type {
+import {
+	type CreateGameInput,
 	CreateGameSchema,
-	GameSnapshot,
-	JoinGameSchema,
-	StartedGame,
+	type GameSnapshot,
+	type JoinGameSchema,
+	QuestionTopicIds,
+	type StartedGame,
 } from "../../../../packages/contracts/src/index";
 import { type GameDb, hashToken, type QueryDb, type Session } from "./auth";
 import {
@@ -15,7 +17,6 @@ import {
 
 export type { GameDb } from "./auth";
 
-type CreateGameInput = z.infer<typeof CreateGameSchema>;
 type JoinGameInput = z.infer<typeof JoinGameSchema>;
 
 type QueryResult<Row> = { rows: Row[] };
@@ -45,6 +46,7 @@ type SnapshotGameRow = {
 	joinCode: string;
 	status: "LOBBY" | "WAITING" | "COMPLETE";
 	roundIntervalSeconds: 300 | 600 | 900;
+	selectedTopics?: GameSnapshot["game"]["selectedTopics"];
 	startedAt: Date | string | null;
 	nextRoundAt: Date | string | null;
 	completedAt: Date | string | null;
@@ -100,6 +102,7 @@ export class GameSnapshotError extends Error {
 }
 
 export async function createGame(input: CreateGameInput, db: GameDb) {
+	const selectedTopics = CreateGameSchema.shape.topics.parse(input.topics);
 	const game = {
 		id: randomUUID(),
 		name: input.name,
@@ -113,13 +116,14 @@ export async function createGame(input: CreateGameInput, db: GameDb) {
 		try {
 			await db.transaction(async (tx) => {
 				await tx.query(
-					"INSERT INTO games (id, name, join_code, host_token_hash, round_interval_seconds) VALUES ($1, $2, $3, $4, $5)",
+					"INSERT INTO games (id, name, join_code, host_token_hash, round_interval_seconds, selected_topics) VALUES ($1, $2, $3, $4, $5, $6)",
 					[
 						game.id,
 						game.name,
 						game.joinCode,
 						hostTokenHash,
 						input.roundIntervalSeconds,
+						selectedTopics,
 					],
 				);
 				if (input.teamName)
@@ -332,6 +336,7 @@ export async function getGameSnapshot(
 		const gameResult = (await tx.query(
 			`SELECT id, name, join_code AS "joinCode", status,
 		        round_interval_seconds AS "roundIntervalSeconds",
+		        selected_topics AS "selectedTopics",
 	        started_at AS "startedAt", next_round_at AS "nextRoundAt",
 	        completed_at AS "completedAt", completion_reason AS "completionReason"
 		 FROM games
@@ -434,6 +439,7 @@ export async function getGameSnapshot(
 		return {
 			game: {
 				...game,
+				selectedTopics: game.selectedTopics ?? [...QuestionTopicIds],
 				startedAt: toISOString(game.startedAt),
 				nextRoundAt: toISOString(game.nextRoundAt),
 				completedAt: toISOString(game.completedAt),

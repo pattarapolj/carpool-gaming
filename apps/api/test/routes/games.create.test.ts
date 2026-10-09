@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { QuestionTopicIds } from "../../../../packages/contracts/src";
 import { buildServer } from "../../src/server";
 
 describe("POST /v1/games", () => {
@@ -243,8 +244,38 @@ describe("POST /v1/games", () => {
 			response.json().game.joinCode,
 			createHash("sha256").update(response.json().hostToken).digest("hex"),
 			600,
+			[...QuestionTopicIds],
 		]);
 	});
+
+	it("persists explicit topics in deduplicated order", async () => {
+		const response = await app.inject({
+			method: "POST",
+			url: "/v1/games",
+			payload: {
+				name: "Trip",
+				roundIntervalSeconds: 300,
+				topics: ["logic", "science", "logic"],
+			},
+		});
+		expect(response.statusCode).toBe(201);
+		expect(writes[0].sql).toContain("selected_topics");
+		expect(writes[0].values[5]).toEqual(["logic", "science"]);
+		expect(response.body).not.toMatch(/token_hash|hostTokenHash/);
+	});
+
+	it.each([[], ["unknown"], ["mixed"]].map((topics) => ({ topics })))(
+		"rejects invalid topics $topics before writing",
+		async ({ topics }) => {
+			const response = await app.inject({
+				method: "POST",
+				url: "/v1/games",
+				payload: { name: "Trip", roundIntervalSeconds: 300, topics },
+			});
+			expectValidationError(response.statusCode, response.json());
+			expect(writes).toHaveLength(0);
+		},
+	);
 
 	it("retries a join-code collision", async () => {
 		collideOnce = true;

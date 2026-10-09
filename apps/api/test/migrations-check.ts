@@ -74,6 +74,9 @@ async function main() {
 		);
 		await seed(db);
 		await seed(db);
+		const legacyQuestions = (
+			await control.query(`SELECT * FROM ${schema}.questions ORDER BY id`)
+		).rows;
 		await db.query(
 			"INSERT INTO car_teams(id,game_id,name,captain_token_hash) VALUES($1,$2,'Legacy car',$3)",
 			[teamId, gameId, "b".repeat(64)],
@@ -90,6 +93,48 @@ async function main() {
 			.rows;
 		await migrate(db, migrations);
 		await migrate(db, migrations);
+		assert.deepEqual(
+			(
+				await control.query(
+					`SELECT selected_topics FROM ${schema}.games WHERE id=$1`,
+					[gameId],
+				)
+			).rows[0].selected_topics,
+			[
+				"world",
+				"thailand",
+				"food",
+				"weird",
+				"nature",
+				"science",
+				"taylor-swift",
+				"breaking-bad",
+				"marvel",
+				"logic",
+				"lateral",
+				"probability",
+				"estimate",
+			],
+		);
+		const upgradedQuestions = (
+			await control.query(`SELECT * FROM ${schema}.questions ORDER BY id`)
+		).rows;
+		assert.deepEqual(
+			upgradedQuestions.map(
+				({ topic_id, answer_window_seconds, ...question }) => {
+					assert.equal(topic_id, "science");
+					assert.equal(answer_window_seconds, 60);
+					return question;
+				},
+			),
+			legacyQuestions,
+		);
+		await seed(db);
+		assert.deepEqual(
+			(await control.query(`SELECT * FROM ${schema}.questions ORDER BY id`))
+				.rows,
+			upgradedQuestions,
+		);
 		assert.equal(
 			(await control.query(`SELECT name FROM ${schema}.games`)).rows[0].name,
 			"Preserve me",
@@ -104,7 +149,7 @@ async function main() {
 		const failed = [
 			...migrations,
 			{
-				name: "006_failure.sql",
+				name: "007_failure.sql",
 				sql: "CREATE TABLE must_rollback(id int); SELECT no_such_function();",
 			},
 		];
@@ -120,7 +165,7 @@ async function main() {
 		assert.equal(
 			(await control.query(`SELECT count(*) FROM ${schema}.schema_migrations`))
 				.rows[0].count,
-			"5",
+			"6",
 		);
 		await control.query(`DROP TABLE ${schema}.schema_migrations`);
 		await assert.rejects(migrate(db, migrations), /adopt/);
@@ -140,7 +185,7 @@ async function main() {
 			`ALTER TABLE ${schema}.answers DISABLE TRIGGER answers_immutable_submission`,
 		);
 		await assert.rejects(
-			migrate(db, migrations, "005_game_completion.sql"),
+			migrate(db, migrations, "006_question_topics.sql"),
 			/structure/,
 		);
 		await control.query(
@@ -148,7 +193,7 @@ async function main() {
 		);
 		await control.query(`CREATE TABLE ${schema}.unexpected(id int)`);
 		await assert.rejects(
-			migrate(db, migrations, "005_game_completion.sql"),
+			migrate(db, migrations, "006_question_topics.sql"),
 			/structure/,
 		);
 		await control.query(`DROP TABLE ${schema}.unexpected`);
@@ -162,13 +207,13 @@ async function main() {
 			`ALTER TABLE ${schema}.answers DISABLE TRIGGER "${trigger}"`,
 		);
 		await assert.rejects(
-			migrate(db, migrations, "005_game_completion.sql"),
+			migrate(db, migrations, "006_question_topics.sql"),
 			/structure/,
 		);
 		await control.query(
 			`ALTER TABLE ${schema}.answers ENABLE TRIGGER "${trigger}"`,
 		);
-		await migrate(db, migrations, "005_game_completion.sql");
+		await migrate(db, migrations, "006_question_topics.sql");
 		await migrate(db, migrations);
 		assert.equal(
 			(await control.query(`SELECT name FROM ${schema}.games`)).rows[0].name,
@@ -189,12 +234,12 @@ async function main() {
 		);
 		await migrate(db, [
 			...migrations,
-			{ name: "006_failure.sql", sql: "SELECT 1" },
+			{ name: "007_failure.sql", sql: "SELECT 1" },
 		]);
 		assert.equal(
 			(await control.query(`SELECT count(*) FROM ${schema}.schema_migrations`))
 				.rows[0].count,
-			"6",
+			"7",
 		);
 		assert.equal(
 			(
