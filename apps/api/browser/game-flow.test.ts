@@ -324,6 +324,15 @@ it("two phones play as host and captain and restore immediate progression withou
 			{ status: "REVEALED", count: 2 },
 			{ status: "OPEN", count: 2 },
 		]);
+		await expect
+			.poll(() =>
+				people.map(
+					(person) =>
+						person.events.filter((event) => event.name === "round.started")
+							.length,
+				),
+			)
+			.toEqual([2, 2]);
 		for (const person of people) {
 			assert.equal(
 				person.events.filter((event) => event.name === "round.revealed").length,
