@@ -60,7 +60,7 @@ describe("lobby API client", () => {
 		).toEqual({ game });
 	});
 
-	it("sends the selected interval when creating a game", async () => {
+	it("sends the selected interval and defaults omitted topics when creating a game", async () => {
 		const responseBody = {
 			game: {
 				id: "e895e664-208c-4248-bde6-b4ca8a06a539",
@@ -87,9 +87,12 @@ describe("lobby API client", () => {
 				method: "POST",
 				body: JSON.stringify({
 					name: "Beach convoy",
+					topics: [...QuestionTopicIds],
 					roundIntervalSeconds: 600,
 				}),
 			}),
 		);
 	});
 });
+
+import { QuestionTopicIds } from "@carpool/contracts";

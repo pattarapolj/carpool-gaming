@@ -178,14 +178,14 @@ async function openLockedGame(
 	immediate = false,
 ) {
 	const games = (await tx.query(
-		"SELECT status,started_at,next_round_at,round_interval_seconds,question_window_seconds FROM games WHERE id::text=$1 FOR UPDATE",
+		"SELECT status,started_at,next_round_at,round_interval_seconds,selected_topics FROM games WHERE id::text=$1 FOR UPDATE",
 		[gameId],
 	)) as Rows<{
 		status: string;
 		started_at: Date;
 		next_round_at: Date;
 		round_interval_seconds: number;
-		question_window_seconds: number;
+		selected_topics: string[];
 	}>;
 	const game = games.rows[0];
 	if (game?.status !== "WAITING" || !game.started_at || !game.next_round_at)
@@ -206,22 +206,31 @@ async function openLockedGame(
 		"SELECT id FROM car_teams WHERE game_id=$1 AND status='ACTIVE' ORDER BY id FOR UPDATE",
 		[gameId],
 	)) as Rows<{ id: string }>;
+	const now = clock();
 	const questions = (await tx.query(
-		"SELECT id,type,prompt,choices FROM questions q WHERE is_active AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.game_id=$1 AND r.question_id=q.id) ORDER BY id LIMIT 1",
-		[gameId],
+		"SELECT id,type,prompt,choices,answer_window_seconds FROM questions q WHERE is_active AND q.topic_id=ANY($2::text[]) AND q.answer_window_seconds <= EXTRACT(EPOCH FROM ($3::timestamptz + interval '2 hours' - $4::timestamptz)) AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.game_id=$1 AND r.question_id=q.id) ORDER BY random() LIMIT 1",
+		[gameId, game.selected_topics, game.started_at, now],
 	)) as Rows<{
 		id: string;
 		type: Round["type"];
 		prompt: string;
 		choices: string[] | null;
+		answer_window_seconds: number;
 	}>;
 	const question = questions.rows[0];
-	const now = clock();
+	const unused = question
+		? true
+		: (
+				(await tx.query(
+					"SELECT EXISTS (SELECT 1 FROM questions q WHERE q.is_active AND q.topic_id=ANY($2::text[]) AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.game_id=$1 AND r.question_id=q.id)) AS unused",
+					[gameId, game.selected_topics],
+				)) as Rows<{ unused: boolean }>
+			).rows[0].unused;
 	const reason = timeLimitReached(game.started_at, now)
 		? "TIME_LIMIT"
 		: !teams.rows.length
 			? "NO_ACTIVE_TEAMS"
-			: !question
+			: !unused
 				? "QUESTION_BANK_EXHAUSTED"
 				: null;
 	if (reason)
@@ -229,12 +238,7 @@ async function openLockedGame(
 			opened: null,
 			completion: await completeLockedGame(gameId, reason, tx, now),
 		};
-	if (
-		!question ||
-		(!immediate && now < new Date(game.next_round_at)) ||
-		now.getTime() + game.question_window_seconds * 1000 >
-			new Date(game.started_at).getTime() + GAME_LIMIT_MS
-	)
+	if (!question || (!immediate && now < new Date(game.next_round_at)))
 		return { opened: null, completion: null };
 	const interval = game.round_interval_seconds * 1000;
 	const anchor = new Date(game.started_at).getTime();
@@ -242,7 +246,10 @@ async function openLockedGame(
 	const nextRoundAt = new Date(
 		anchor + (Math.floor((now.getTime() - anchor) / interval) + 1) * interval,
 	);
-	const endsAt = new Date(now.getTime() + game.question_window_seconds * 1000);
+	const endsAt = new Date(
+		now.getTime() + question.answer_window_seconds * 1000,
+	);
+	const { answer_window_seconds: _, ...publicQuestion } = question;
 	const id = randomUUID();
 	const sequence = (previous.rows[0]?.sequence ?? 0) + 1;
 	await tx.query(
@@ -272,7 +279,7 @@ async function openLockedGame(
 				status: "OPEN" as const,
 				startsAt: now.toISOString(),
 				endsAt: endsAt.toISOString(),
-				question,
+				question: publicQuestion,
 			},
 			nextRoundAt: nextRoundAt.toISOString(),
 		},
@@ -372,10 +379,11 @@ async function automaticCompletionReason(
 	now: Date,
 ): Promise<CompletionReason | null> {
 	const state = (await tx.query(
-		`SELECT started_at,
+		`SELECT g.started_at,
 		EXISTS (SELECT 1 FROM car_teams WHERE game_id=$1 AND status='ACTIVE') AS active,
-		EXISTS (SELECT 1 FROM questions q WHERE is_active AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.game_id=$1 AND r.question_id=q.id)) AS unused
-		FROM games WHERE id=$1`,
+		EXISTS (SELECT 1 FROM questions q WHERE q.is_active AND q.topic_id=ANY(g.selected_topics)
+			AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.game_id=g.id AND r.question_id=q.id)) AS unused
+		FROM games g WHERE g.id=$1`,
 		[gameId],
 	)) as Rows<{ started_at: Date | null; active: boolean; unused: boolean }>;
 	const game = state.rows[0];

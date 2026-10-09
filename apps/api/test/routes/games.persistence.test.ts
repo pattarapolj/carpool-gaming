@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { loadMigrations } from "../../src/migrations";
 import { buildServer } from "../../src/server";
 
 let db: PGlite;
@@ -10,11 +10,7 @@ let joinCode: string;
 
 beforeAll(async () => {
 	db = new PGlite();
-	const migration = await readFile(
-		new URL("../../migrations/001_games.sql", import.meta.url),
-		"utf8",
-	);
-	await db.exec(migration);
+	for (const migration of await loadMigrations()) await db.exec(migration.sql);
 	app = buildServer({
 		query: (sql, values) => db.query(sql, values),
 		end: () => db.close(),

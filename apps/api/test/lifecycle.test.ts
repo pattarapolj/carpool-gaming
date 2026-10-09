@@ -38,6 +38,9 @@ beforeAll(async () => {
 	await db.exec(
 		await readFile(new URL("../seeds/questions.sql", import.meta.url), "utf8"),
 	);
+	await db.query(
+		"INSERT INTO questions (id,type,prompt,choices,correct_answer,explanation,source_title,source_url,topic_id,answer_window_seconds) VALUES ('30000000-0000-4000-8000-000000000001','MULTIPLE_CHOICE','Test question','[\"Jupiter\",\"Earth\"]','\"Jupiter\"','Test question','Test source','https://example.com','science',60)",
+	);
 	storage = {
 		query: (sql, values) => db.query(sql, values),
 		transaction: (run) => db.transaction((tx) => run(tx)),
@@ -51,6 +54,14 @@ async function fixture(count = 2, playing = true) {
 		{ name: "Trip", roundIntervalSeconds: 300 },
 		storage,
 	);
+	await db.query(
+		"UPDATE games SET selected_topics=ARRAY['science'] WHERE id=$1",
+		[created.game.id],
+	);
+	await db.query("UPDATE questions SET is_active=(id=$1 OR id=$2)", [
+		"10000000-0000-4000-8000-000000000001",
+		"30000000-0000-4000-8000-000000000001",
+	]);
 	const host: Session = { gameId: created.game.id, role: "HOST" };
 	const captains: Session[] = [];
 	const tokens: string[] = [];
@@ -398,22 +409,22 @@ it("caps ACTIVE lobby cars at 20, retains duplicate precedence, and LEFT frees c
 });
 
 it.each([45, 60])(
-	"does not open a shortened %s-second final window, completes at exactly two hours",
+	"does not open a shortened %s-second final window and waits until two hours",
 	async (window) => {
 		const f = await fixture();
 		assert(f.snapshot.round);
 		await revealDueRound(f.snapshot.round.id, storage, f.at(60));
-		await db.query("UPDATE games SET question_window_seconds=$2 WHERE id=$1", [
-			f.gameId,
-			window,
-		]);
+		await db.query("UPDATE questions SET answer_window_seconds=$1", [window]);
 		expect(
 			await openDueRound(f.gameId, storage, f.at(7200 - window + 0.001)),
 		).toBeNull();
 		await tick(storage, f.at(7199.999));
-		expect((await getGameSnapshot(f.gameId, f.host, storage)).game.status).toBe(
-			"WAITING",
-		);
+		expect(
+			(await getGameSnapshot(f.gameId, f.host, storage)).game,
+		).toMatchObject({
+			status: "WAITING",
+			completionReason: null,
+		});
 		const transitions = await tick(storage, f.at(7200));
 		expect(transitions).toEqual(
 			expect.arrayContaining([
@@ -444,10 +455,10 @@ it.each([45, 60])(
 		const f = await fixture();
 		assert(f.snapshot.round);
 		await revealDueRound(f.snapshot.round.id, storage, f.at(60));
-		await db.query("UPDATE games SET question_window_seconds=$2 WHERE id=$1", [
-			f.gameId,
-			window,
-		]);
+		await db.query(
+			"UPDATE questions SET is_active=(id='10000000-0000-4000-8000-000000000002'),answer_window_seconds=$1",
+			[window],
+		);
 		const opened = await openDueRound(f.gameId, storage, f.at(7200 - window));
 		assert(opened);
 		expect(opened.round.endsAt).toBe(f.at(7200)().toISOString());
@@ -529,21 +540,23 @@ it("empty active bank starts durably COMPLETE with nullable next time", async ()
 });
 
 it("final bank reveal completes in the scoring transaction without phantom next round", async () => {
-	const f = await fixture();
-	assert(f.snapshot.round);
+	const f = await fixture(2, false);
 	await db.query(
 		"UPDATE questions SET is_active=(id='10000000-0000-4000-8000-000000000001')",
 	);
+	await startGame(f.gameId, false, f.host, storage);
+	const snapshot = await getGameSnapshot(f.gameId, f.host, storage);
+	assert(snapshot.round);
 	try {
 		await lockAnswer(
-			f.snapshot.round.id,
+			snapshot.round.id,
 			{ value: "Jupiter" },
 			f.captains[0],
 			storage,
 			f.at(1),
 		);
 		const last = await lockAnswer(
-			f.snapshot.round.id,
+			snapshot.round.id,
 			{ value: "Earth" },
 			f.captains[1],
 			storage,

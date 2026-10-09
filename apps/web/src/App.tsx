@@ -1,3 +1,8 @@
+import {
+	QUESTION_TOPICS,
+	type QuestionTopicId,
+	QuestionTopicIds,
+} from "@carpool/contracts";
 import { type FormEvent, useState } from "react";
 import { createGame, joinGame } from "./api";
 import { GameScreen } from "./screens/GameScreen";
@@ -19,6 +24,9 @@ export default function App() {
 	});
 	const [mode, setMode] = useState<AccessMode>(invite ? "join" : "create");
 	const [gameName, setGameName] = useState("");
+	const [topics, setTopics] = useState<QuestionTopicId[]>([
+		...QuestionTopicIds,
+	]);
 	const [roundIntervalSeconds, setRoundIntervalSeconds] =
 		useState<RoundInterval>(300);
 	const [joinCode, setJoinCode] = useState(invite);
@@ -35,6 +43,7 @@ export default function App() {
 			const created = await createGame({
 				name: gameName,
 				teamName,
+				topics,
 				roundIntervalSeconds,
 			});
 			activateSession({
@@ -180,6 +189,36 @@ export default function App() {
 								required
 								value={teamName}
 							/>
+							<fieldset className="topic-picker">
+								<legend>Choose quiz topics</legend>
+								<p aria-live="polite" className="topic-selection-summary">
+									{topics.length === QuestionTopicIds.length
+										? "Mixed Topics"
+										: topics.length === 0
+											? "Choose at least one topic."
+											: `${topics.length} ${topics.length === 1 ? "topic" : "topics"} selected`}
+								</p>
+								<div className="topic-options">
+									{QuestionTopicIds.map((topic) => (
+										<label className="topic-option" key={topic}>
+											<input
+												checked={topics.includes(topic)}
+												name="topics"
+												onChange={(event) => {
+													const checked = event.currentTarget.checked;
+													setTopics((selected) =>
+														checked
+															? [...selected, topic]
+															: selected.filter((item) => item !== topic),
+													);
+												}}
+												type="checkbox"
+											/>
+											{QUESTION_TOPICS[topic]}
+										</label>
+									))}
+								</div>
+							</fieldset>
 							<label htmlFor="round-interval">Round interval</label>
 							<select
 								id="round-interval"
@@ -204,7 +243,11 @@ export default function App() {
 									{error}
 								</p>
 							)}
-							<button className="primary-button" disabled={busy} type="submit">
+							<button
+								className="primary-button"
+								disabled={busy || topics.length === 0}
+								type="submit"
+							>
 								{busy ? "Creating game…" : "Create game"}
 								<span aria-hidden="true">↗</span>
 							</button>

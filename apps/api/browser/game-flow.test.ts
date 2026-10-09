@@ -109,6 +109,28 @@ async function snapshot(page: Page) {
 	return GameSnapshotSchema.parse(result);
 }
 
+async function currentQuestion(page: Page) {
+	const view = await snapshot(page);
+	assert(view.round?.status === "OPEN");
+	const result = await harness.control.query(
+		"SELECT q.prompt,q.type,q.correct_answer #>> '{}' AS answer FROM rounds r JOIN questions q ON q.id=r.question_id WHERE r.id=$1",
+		[view.round.id],
+	);
+	const question = result.rows[0];
+	assert(question);
+	return {
+		...question,
+		answer:
+			question.type === "TRUE_FALSE"
+				? question.answer === "true"
+					? "True"
+					: "False"
+				: question.type === "ESTIMATE"
+					? Number(question.answer)
+					: question.answer,
+	};
+}
+
 function assertNoKeys(value: unknown, forbidden: string[]) {
 	if (typeof value !== "object" || value === null) return;
 	for (const [key, child] of Object.entries(value)) {
@@ -302,6 +324,15 @@ it("two phones play as host and captain and restore immediate progression withou
 			{ status: "REVEALED", count: 2 },
 			{ status: "OPEN", count: 2 },
 		]);
+		await expect
+			.poll(() =>
+				people.map(
+					(person) =>
+						person.events.filter((event) => event.name === "round.started")
+							.length,
+				),
+			)
+			.toEqual([2, 2]);
 		for (const person of people) {
 			assert.equal(
 				person.events.filter((event) => event.name === "round.revealed").length,
@@ -708,9 +739,29 @@ it("the last fitting slot neutral-waits at the hard limit and the real coordinat
 	const host = await client();
 	const car = await client();
 	try {
+		await harness.control.query(
+			"UPDATE questions SET topic_id='science',answer_window_seconds=60",
+		);
+		await harness.control.query(
+			"UPDATE questions SET topic_id='world' WHERE id=ANY($1::uuid[])",
+			[
+				[
+					"00000000-0000-4000-8000-000000000001",
+					"00000000-0000-4000-8000-000000000002",
+					"00000000-0000-4000-8000-000000000004",
+				],
+			],
+		);
+		await harness.control.query(
+			"UPDATE questions SET answer_window_seconds=180 WHERE id=$1",
+			["00000000-0000-4000-8000-000000000004"],
+		);
 		await host.page.goto(harness.url);
 		await host.page.getByLabel("Game name").fill("Final slot convoy");
 		await host.page.getByLabel("Car name").fill("Host car");
+		for (const topic of await host.page.getByRole("checkbox").all())
+			if (await topic.isChecked()) await topic.uncheck();
+		await host.page.getByRole("checkbox", { name: "Around the World" }).check();
 		await host.page.getByRole("button", { name: "Create game" }).click();
 		await visible(host.page, "Share this join code");
 		await car.page.goto(await host.page.getByLabel("Invite link").inputValue());
@@ -719,21 +770,26 @@ it("the last fitting slot neutral-waits at the hard limit and the real coordinat
 		await host.page
 			.getByRole("button", { name: "Start game", exact: true })
 			.click();
-		await visible(car.page, "Which ocean is the largest on Earth?");
-		await choose(car.page, "Pacific Ocean");
+		await expect
+			.poll(async () => (await snapshot(car.page)).round?.status)
+			.toBe("OPEN");
+		const first = await currentQuestion(car.page);
+		await visible(car.page, first.prompt);
+		await choose(car.page, first.answer);
 		vi.setSystemTime(new Date(origin.getTime() + 60000));
 		await harness.tick();
 		await visible(host.page, "Leaderboard");
 		vi.setSystemTime(new Date(origin.getTime() + 7140000));
 		await harness.tick();
-		await visible(car.page, "The Sun orbits the Earth.");
+		const second = await currentQuestion(car.page);
+		await visible(car.page, second.prompt);
 		const last = (await snapshot(host.page)).round;
 		assert(last?.status === "OPEN");
 		assert.equal(Date.parse(last.endsAt), origin.getTime() + 7200000);
 		// One millisecond into the last window, another full window no longer fits.
 		vi.setSystemTime(new Date(origin.getTime() + 7140001));
-		await choose(car.page, "False");
-		await choose(host.page, "False");
+		await choose(car.page, second.answer);
+		await choose(host.page, second.answer);
 		await visible(host.page, "Leaderboard");
 		const view = await snapshot(host.page);
 		assert.equal(view.game.status, "WAITING");
@@ -761,6 +817,90 @@ it("the last fitting slot neutral-waits at the hard limit and the real coordinat
 			2,
 		);
 	} finally {
+		await harness.control.query(
+			"UPDATE questions SET topic_id='science',answer_window_seconds=60",
+		);
 		await Promise.all([host.context.close(), car.context.close()]);
+	}
+}, 60000);
+
+it("restores a Science-only selection and plays two phones only from that topic", async () => {
+	vi.setSystemTime(origin);
+	const host = await client();
+	const captain = await client();
+	try {
+		await harness.control.query(
+			"UPDATE questions SET topic_id='world' WHERE id='00000000-0000-4000-8000-000000000004'",
+		);
+		await host.page.goto(harness.url);
+		for (const topic of [
+			"Around the World",
+			"Thailand",
+			"Food & Drinks",
+			"Weird but True",
+			"Animals & Nature",
+			"Taylor Swift",
+			"Breaking Bad",
+			"Marvel",
+			"Logic & Clever Strategies",
+			"Lateral Thinking",
+			"Probability Puzzles",
+			"Closest Estimate",
+		]) {
+			await host.page.getByRole("checkbox", { name: topic }).uncheck();
+		}
+		await host.page.getByLabel("Game name").fill("Science-only convoy");
+		await host.page.getByLabel("Car name").fill("Host car");
+		await host.page.getByRole("button", { name: "Create game" }).click();
+		await visible(host.page, "Share this join code");
+		assert.deepEqual((await snapshot(host.page)).game.selectedTopics, [
+			"science",
+		]);
+		await restore(host, "Share this join code");
+		assert.deepEqual((await snapshot(host.page)).game.selectedTopics, [
+			"science",
+		]);
+		await captain.page.goto(
+			await host.page.getByLabel("Invite link").inputValue(),
+		);
+		await captain.page.getByLabel("Car name").fill("Captain car");
+		await captain.page.getByRole("button", { name: "Join game" }).click();
+		await host.page
+			.getByRole("button", { name: "Start game", exact: true })
+			.click();
+		const open = await snapshot(host.page);
+		assert(open.round?.status === "OPEN");
+		const question = (
+			await harness.control.query(
+				"SELECT q.topic_id,q.type,q.correct_answer #>> '{}' AS answer FROM rounds r JOIN questions q ON q.id=r.question_id WHERE r.id=$1",
+				[open.round.id],
+			)
+		).rows[0];
+		assert.equal(question.topic_id, "science");
+		let answer: string | number;
+		if (question.type === "TRUE_FALSE")
+			answer = question.answer === "true" ? "True" : "False";
+		else if (question.type === "ESTIMATE") answer = Number(question.answer);
+		else answer = question.answer;
+		await Promise.all(
+			[host, captain].map((person) => choose(person.page, answer)),
+		);
+		await expect
+			.poll(async () => (await snapshot(host.page)).round?.sequence)
+			.toBe(2);
+		const next = await snapshot(host.page);
+		assert(next.round?.status === "OPEN");
+		const nextTopic = (
+			await harness.control.query(
+				"SELECT q.topic_id FROM rounds r JOIN questions q ON q.id=r.question_id WHERE r.id=$1",
+				[next.round.id],
+			)
+		).rows[0].topic_id;
+		assert.equal(nextTopic, "science");
+	} finally {
+		await harness.control.query(
+			"UPDATE questions SET topic_id='science',answer_window_seconds=60",
+		);
+		await Promise.all([host.context.close(), captain.context.close()]);
 	}
 }, 60000);

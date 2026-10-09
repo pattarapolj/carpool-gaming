@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { GameSnapshotSchema } from "../src/index";
+import { GameSnapshotSchema, QuestionTopicIds } from "../src/index";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const now = "2026-10-08T00:00:00.000Z";
@@ -34,6 +34,32 @@ const snapshot = {
 		},
 	},
 };
+
+it("restores saved topic selections and defaults older snapshots to all topics", () => {
+	expect(GameSnapshotSchema.parse(snapshot).game).toMatchObject({
+		selectedTopics: QuestionTopicIds,
+	});
+	expect(
+		GameSnapshotSchema.parse({
+			...snapshot,
+			game: { ...snapshot.game, selectedTopics: ["science", "logic"] },
+		}).game,
+	).toMatchObject({ selectedTopics: ["science", "logic"] });
+});
+
+it.each(
+	[[], ["mixed"], ["unknown"]].map((selectedTopics) => ({ selectedTopics })),
+)(
+	"rejects invalid saved topic selection $selectedTopics",
+	({ selectedTopics }) => {
+		expect(
+			GameSnapshotSchema.safeParse({
+				...snapshot,
+				game: { ...snapshot.game, selectedTopics },
+			}).success,
+		).toBe(false);
+	},
+);
 
 it("accepts nullable lobby fields and both round phases", () => {
 	expect(GameSnapshotSchema.safeParse(snapshot).success).toBe(true);

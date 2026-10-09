@@ -34,6 +34,9 @@ beforeAll(async () => {
 	await db.exec(
 		await readFile(new URL("../seeds/questions.sql", import.meta.url), "utf8"),
 	);
+	await db.query(
+		"INSERT INTO questions (id,type,prompt,choices,correct_answer,explanation,source_title,source_url,topic_id,answer_window_seconds) VALUES ('30000000-0000-4000-8000-000000000001','MULTIPLE_CHOICE','Test question','[\"Jupiter\",\"Earth\"]','\"Jupiter\"','Test question','Test source','https://example.com','science',60)",
+	);
 	storage = {
 		query: (sql, values) => db.query(sql, values),
 		transaction: (run) => db.transaction((tx) => run(tx)),
@@ -98,6 +101,14 @@ async function fixture() {
 		{ name: "Live trip", roundIntervalSeconds: 300 },
 		storage,
 	);
+	await db.query(
+		"UPDATE games SET selected_topics=ARRAY['science'] WHERE id=$1",
+		[created.game.id],
+	);
+	await db.query("UPDATE questions SET is_active=(id=$1 OR id=$2)", [
+		"10000000-0000-4000-8000-000000000001",
+		"30000000-0000-4000-8000-000000000001",
+	]);
 	const teams = [];
 	for (let i = 0; i < 2; i++)
 		teams.push(
@@ -375,6 +386,9 @@ it("publishes forced host-end reveal/completion once and preserves exact end HTT
 
 it("deadline delivery reveals once and sends last-question completion from the same commit", async () => {
 	const own = await fixture();
+	await db.query(
+		"UPDATE questions SET is_active=(id='10000000-0000-4000-8000-000000000001')",
+	);
 	const socket = await subscribe(own.hostToken, own.game.id);
 	await post(`/v1/games/${own.game.id}/start`, own.hostToken);
 	await settle();

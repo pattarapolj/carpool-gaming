@@ -37,8 +37,23 @@ afterAll(async () => {
 
 async function game(count = 3) {
 	const gameId = randomUUID();
+	const extraQuestions = [randomUUID(), randomUUID()];
+	// Keep existing gameplay assertions deterministic; focused topic tests opt in
+	// to additional rows explicitly.
 	await db.query(
-		"INSERT INTO games (id,name,join_code,host_token_hash,status,round_interval_seconds,started_at,next_round_at) VALUES ($1,'Trip',$2,$3,'WAITING',300,$4,$4)",
+		"UPDATE questions SET is_active=(id='10000000-0000-4000-8000-000000000001')",
+	);
+	for (const [index, id] of extraQuestions.entries())
+		await db.query(
+			"INSERT INTO questions (id,type,prompt,choices,correct_answer,explanation,source_title,source_url,topic_id,answer_window_seconds) VALUES ($1,'MULTIPLE_CHOICE',$2,'[\"Jupiter\",\"Earth\"]','\"Jupiter\"','Test question','Test source','https://example.com','science',60)",
+			[id, `Test question ${index}`],
+		);
+	await db.query(
+		"UPDATE questions SET is_active=(id=$1 OR id=ANY($2::uuid[]))",
+		["10000000-0000-4000-8000-000000000001", extraQuestions],
+	);
+	await db.query(
+		"INSERT INTO games (id,name,join_code,host_token_hash,status,round_interval_seconds,started_at,next_round_at,selected_topics) VALUES ($1,'Trip',$2,$3,'WAITING',300,$4,$4,ARRAY['science'])",
 		[gameId, gameId.slice(0, 6), hashToken(gameId), origin],
 	);
 	const sessions: Session[] = [];
@@ -52,6 +67,111 @@ async function game(count = 3) {
 	}
 	return { gameId, sessions };
 }
+
+it("chooses unused active questions only from saved topics and exhausts that pool", async () => {
+	const { gameId } = await game(1);
+	const ids = [
+		"10000000-0000-4000-8000-000000000001",
+		"10000000-0000-4000-8000-000000000002",
+		"10000000-0000-4000-8000-000000000003",
+	];
+	await db.query("UPDATE questions SET is_active=(id=ANY($1::uuid[]))", [ids]);
+	await db.query(
+		"UPDATE questions SET topic_id=CASE WHEN id=$1 OR id=$2 THEN 'science' ELSE 'world' END,answer_window_seconds=60 WHERE id=ANY($3::uuid[])",
+		[ids[0], ids[1], ids],
+	);
+	try {
+		const first = await engine.openDueRound(gameId, storage, at(0));
+		assert(first);
+		await engine.revealDueRound(first.round.id, storage, at(60));
+		const second = await engine.openDueRound(gameId, storage, at(300));
+		assert(second);
+		await engine.revealDueRound(second.round.id, storage, at(360));
+		assert.equal(await engine.openDueRound(gameId, storage, at(360)), null);
+		const state = await db.query(
+			"SELECT status,completion_reason FROM games WHERE id=$1",
+			[gameId],
+		);
+		expect(state.rows).toEqual([
+			{ status: "COMPLETE", completion_reason: "QUESTION_BANK_EXHAUSTED" },
+		]);
+		const used = await db.query<{ question_id: string }>(
+			"SELECT question_id FROM rounds WHERE game_id=$1",
+			[gameId],
+		);
+		expect(new Set(used.rows.map((row) => row.question_id))).toEqual(
+			new Set(ids.slice(0, 2)),
+		);
+	} finally {
+		await db.query(
+			"UPDATE questions SET topic_id='science',answer_window_seconds=60,is_active=true WHERE id=ANY($1::uuid[])",
+			[ids],
+		);
+	}
+});
+
+it.each([
+	["60-second", "10000000-0000-4000-8000-000000000001", 60],
+	["180-second", "10000000-0000-4000-8000-000000000002", 180],
+])(
+	"uses the selected question's %s answer window",
+	async (_label, id, seconds) => {
+		const { gameId } = await game(1);
+		await db.query("UPDATE questions SET is_active=(questions.id=$1)", [id]);
+		await db.query(
+			"UPDATE questions SET answer_window_seconds=$2 WHERE id=$1",
+			[id, seconds],
+		);
+		try {
+			const opened = await engine.openDueRound(gameId, storage, at(0));
+			assert(opened);
+			expect(opened.round.endsAt).toBe(
+				new Date(origin.getTime() + seconds * 1000).toISOString(),
+			);
+		} finally {
+			await db.query(
+				"UPDATE questions SET answer_window_seconds=60,is_active=true",
+			);
+		}
+	},
+);
+
+it("does not open a selected question whose full answer window crosses the game cap", async () => {
+	const { gameId } = await game(1);
+	const id = "10000000-0000-4000-8000-000000000002";
+	await db.query(
+		"UPDATE questions SET is_active=(questions.id=$1),answer_window_seconds=180",
+		[id],
+	);
+	try {
+		const opened = await engine.openDueRound(gameId, storage, at(7200 - 60));
+		expect(opened).toBeNull();
+		expect(
+			(
+				await db.query(
+					"SELECT status,completion_reason FROM games WHERE id=$1",
+					[gameId],
+				)
+			).rows,
+		).toEqual([{ status: "WAITING", completion_reason: null }]);
+		expect(
+			(await db.query("SELECT id FROM rounds WHERE game_id=$1", [gameId])).rows,
+		).toEqual([]);
+		expect(await engine.openDueRound(gameId, storage, at(7200))).toBeNull();
+		expect(
+			(
+				await db.query(
+					"SELECT status,completion_reason FROM games WHERE id=$1",
+					[gameId],
+				)
+			).rows,
+		).toEqual([{ status: "COMPLETE", completion_reason: "TIME_LIMIT" }]);
+	} finally {
+		await db.query(
+			"UPDATE questions SET answer_window_seconds=60,is_active=true",
+		);
+	}
+});
 
 it("opens one public round immediately with a full window and fixed schedule", async () => {
 	const { gameId } = await game();
@@ -200,52 +320,42 @@ it("scores correct, wrong and unanswered teams atomically at the exact deadline"
 });
 
 it("reveals on all answers, scores booleans and closest estimate ties once", async () => {
-	const { gameId, sessions } = await game();
-	await db.query(
-		"UPDATE questions SET is_active=(id <= '10000000-0000-4000-8000-000000000003')",
-	);
+	const cases = [
+		[
+			"10000000-0000-4000-8000-000000000001",
+			["Jupiter", "Earth", "Earth"],
+			[1, 0, 0],
+		],
+		["10000000-0000-4000-8000-000000000002", [true, false, false], [1, 0, 0]],
+		["10000000-0000-4000-8000-000000000003", [155, 175, 195], [1, 1, 0]],
+	] as const;
 	try {
-		let opened = await engine.openDueRound(gameId, storage, at(0));
-		for (const [index, values, points] of [
-			[0, ["Jupiter", "Earth", "Earth"], [1, 0, 0]],
-			[1, [true, false, false], [1, 0, 0]],
-			[2, [155, 175, 195], [1, 1, 0]],
-		] as const) {
+		for (const [questionId, values, points] of cases) {
+			const { gameId, sessions } = await game();
+			await db.query("UPDATE questions SET is_active=(id=$1)", [questionId]);
+			const opened = await engine.openDueRound(gameId, storage, at(0));
 			assert(opened);
-			const id = opened.round.id;
 			const answers = await Promise.all(
 				sessions.map((session, i) =>
 					engine.lockAnswer(
-						id,
+						opened.round.id,
 						{ value: values[i] },
 						session,
 						storage,
-						at(index + 1),
+						at(1),
 					),
 				),
 			);
 			expect(answers.filter((answer) => answer.reveal)).toHaveLength(1);
 			const reveal = answers.find((answer) => answer.reveal)?.reveal;
 			assert(reveal);
+			expect(reveal.nextRoundAt).toBeNull();
 			for (let i = 0; i < 3; i++)
 				expect(
 					reveal.results?.find((result) => result.teamId === sessions[i].teamId)
 						?.pointsAwarded,
 				).toBe(points[i]);
-			expect(reveal.nextRoundAt).toBe(
-				index === 2 ? null : at(index + 1)().toISOString(),
-			);
-			expect(
-				await engine.revealDueRound(id, storage, at(index + 2)),
-			).toBeNull();
-			opened = answers.find((answer) => answer.opened)?.opened ?? null;
 		}
-		const scores = await db.query<{ score: number }>(
-			"SELECT score FROM car_teams WHERE game_id=$1 ORDER BY name",
-			[gameId],
-		);
-		expect(scores.rows.map((team) => team.score)).toEqual([3, 1, 0]);
-		expect(await engine.openDueRound(gameId, storage, at(900))).toBeNull();
 	} finally {
 		await db.query("UPDATE questions SET is_active=true");
 	}

@@ -10,6 +10,7 @@ import { tick } from "../src/coordinator";
 import { createLiveServer } from "../src/live";
 import { registerGameRoutes } from "../src/routes/games";
 import { createPostgresDb } from "../src/server";
+import type { GameDb, QueryDb } from "../src/services/auth";
 import { testDatabaseUrl } from "../test/postgres-url";
 
 export async function browserHarness() {
@@ -18,7 +19,17 @@ export async function browserHarness() {
 	const schema = `carpool_browser_${randomUUID().replaceAll("-", "")}`;
 	const options = `-c search_path=${schema} -c statement_timeout=10000`;
 	const control = new Pool({ connectionString, options });
-	const db = createPostgresDb({ connectionString, options });
+	const storage = createPostgresDb({ connectionString, options });
+	const db: GameDb = {
+		query: (sql, values) => storage.query(sql, values),
+		end: () => storage.end(),
+		transaction: async <Result>(run: (tx: QueryDb) => Promise<Result>) =>
+			storage.transaction(async (tx) => {
+				// Repeat the real random selector with a stable sequence in browser acceptance.
+				await tx.query("SELECT setseed(0.88)", []);
+				return run(tx);
+			}),
+	};
 	const app = Fastify();
 	let created = false;
 	let live: ReturnType<typeof createLiveServer> | undefined;

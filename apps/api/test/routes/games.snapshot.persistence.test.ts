@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { QuestionTopicIds } from "../../../../packages/contracts/src";
 import { buildServer } from "../../src/server";
 
 describe("GET /v1/games/:gameId/snapshot", () => {
@@ -16,6 +17,7 @@ describe("GET /v1/games/:gameId/snapshot", () => {
 			"003_round_storage.sql",
 			"004_round_participants.sql",
 			"005_game_completion.sql",
+			"006_question_topics.sql",
 		]) {
 			const migration = await readFile(
 				new URL(`../../migrations/${migrationName}`, import.meta.url),
@@ -28,6 +30,30 @@ describe("GET /v1/games/:gameId/snapshot", () => {
 			end: () => db.close(),
 			transaction: (run) => db.transaction((tx) => run(tx)),
 		});
+	});
+
+	it("restores normalized saved topics in the lobby without disclosing tokens", async () => {
+		const create = await app.inject({
+			method: "POST",
+			url: "/v1/games",
+			payload: {
+				name: "Puzzles",
+				roundIntervalSeconds: 300,
+				selectedTopics: [...QuestionTopicIds],
+				topics: ["logic", "science", "logic"],
+			},
+		});
+		expect(create.statusCode).toBe(201);
+		const { game, hostToken } = create.json();
+		const response = await app.inject({
+			method: "GET",
+			url: `/v1/games/${game.id}/snapshot`,
+			headers: { authorization: `Bearer ${hostToken}` },
+		});
+		expect(response.statusCode).toBe(200);
+		expect(response.json().game.selectedTopics).toEqual(["logic", "science"]);
+		expect(response.body).not.toContain(hostToken);
+		expect(response.body).not.toMatch(/token_hash|hostTokenHash/);
 	});
 
 	afterAll(async () => {

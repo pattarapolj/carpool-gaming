@@ -1,4 +1,4 @@
-import type { GameSnapshot } from "@carpool/contracts";
+import { type GameSnapshot, QuestionTopicIds } from "@carpool/contracts";
 import type { GameSession } from "../session";
 
 export const session: GameSession = {
@@ -20,6 +20,7 @@ export function gameSnapshot(): GameSnapshot {
 			joinCode: "AB12CD",
 			status: "WAITING",
 			roundIntervalSeconds: 300,
+			selectedTopics: [...QuestionTopicIds],
 			startedAt: "2026-10-08T10:00:00.000Z",
 			nextRoundAt: "2026-10-08T10:05:00.000Z",
 			completedAt: null,
