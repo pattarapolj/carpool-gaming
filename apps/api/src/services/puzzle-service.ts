@@ -294,7 +294,7 @@ export async function loadSongClue(
 		const puzzle = catalog.find(
 			(p) => p.id === round.puzzle_ids[progress.current_index],
 		);
-		const trackId = entries.melodies.find(
+		const trackId = entries[puzzle?.theme ?? ""]?.find(
 			(e) => e.id === puzzle?.answerId,
 		)?.trackId;
 		if (puzzle?.format !== "MUSIC" || !trackId)

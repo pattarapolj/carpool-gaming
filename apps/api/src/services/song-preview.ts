@@ -1,12 +1,14 @@
 import { spawn } from "node:child_process";
 import { entries } from "./puzzle-catalog";
 
-// shortcut: A fixed 15-track pack bounds this in-memory cache; use shared storage if the library grows.
+// shortcut: PCM cache holds about 43 MB for 90 curated tracks; add eviction before substantially growing the catalog.
 const cache = new Map<number, { expires: number; pcm: Promise<Buffer> }>();
 
 export async function songPreview(trackId: number, seconds: number) {
 	if (
-		!entries.melodies.some((entry) => entry.trackId === trackId) ||
+		!Object.values(entries).some((pack) =>
+			pack.some((entry) => entry.trackId === trackId),
+		) ||
 		![2, 4, 8, 15].includes(seconds)
 	)
 		throw new Error("Invalid song clue");

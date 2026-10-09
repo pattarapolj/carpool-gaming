@@ -13,11 +13,25 @@ export const PUZZLE_FORMATS: Record<PuzzleFormat, string> = {
 	MUSIC: "Guess the Song",
 	TRIVIA: "Trivia",
 };
-export const PuzzleThemeSchema = z.enum(["naruto", "animals", "melodies"]);
+export const PuzzleThemeSchema = z.enum([
+	"naruto",
+	"animals",
+	"melodies",
+	"taylor-swift",
+	"ed-sheeran",
+	"songs-2000s",
+	"songs-2010s",
+	"songs-2020s",
+]);
 export const PUZZLE_PACKS = [
 	{ id: "naruto", name: "Naruto", formats: ["CHARACTER"] },
 	{ id: "animals", name: "Animals", formats: ["PICTURE", "TRIVIA"] },
 	{ id: "melodies", name: "International ’90s songs", formats: ["MUSIC"] },
+	{ id: "songs-2000s", name: "International 2000s songs", formats: ["MUSIC"] },
+	{ id: "songs-2010s", name: "International 2010s songs", formats: ["MUSIC"] },
+	{ id: "songs-2020s", name: "International 2020s songs", formats: ["MUSIC"] },
+	{ id: "taylor-swift", name: "Taylor Swift", formats: ["MUSIC"] },
+	{ id: "ed-sheeran", name: "Ed Sheeran", formats: ["MUSIC"] },
 ] as const;
 export const PuzzleSetupSchema = z
 	.object({ theme: PuzzleThemeSchema, format: PuzzleFormatSchema })

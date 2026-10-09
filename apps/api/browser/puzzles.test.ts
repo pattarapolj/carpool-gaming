@@ -6,6 +6,7 @@ import {
 	CreateGameResponseSchema,
 	type GameSnapshot,
 	GameSnapshotSchema,
+	PUZZLE_PACKS,
 } from "../../../packages/contracts/src/index";
 import { catalog } from "../src/services/puzzle-catalog";
 import { previewFixture } from "../test/fixtures/song-recording";
@@ -263,73 +264,90 @@ it("plays a two-car timed round, restores guesses and skipped puzzles, and start
 	}
 }, 60000);
 
-it("decodes and replays progressively longer music clues in Chromium", async () => {
-	// Keep CI independent of provider availability while exercising the real clip endpoint and decoder.
-	vi.stubGlobal("fetch", previewFixture);
-	const context = await harness.browser.newContext({
-		viewport: { width: 390, height: 844 },
-	});
-	const page = await context.newPage();
-	try {
-		await page.goto(harness.url);
-		await page.getByLabel("Game name", { exact: true }).fill("Melody trip");
-		await page.getByLabel("Car name", { exact: true }).fill("Music car");
-		await page.getByLabel("Game style").selectOption("puzzles");
-		await page.getByLabel("Theme", { exact: true }).selectOption("melodies");
-		await page
-			.getByRole("button", { name: "Create game", exact: true })
-			.click();
-		await page
-			.getByRole("button", { name: "Start practice game", exact: true })
-			.click();
-		await page.locator("audio").waitFor();
-		const duration = await page.locator("audio").evaluate(async (audio) => {
-			const player = audio as HTMLAudioElement;
-			await player.play();
-			player.pause();
-			return player.duration;
+it.each(
+	PUZZLE_PACKS.filter((pack) =>
+		pack.formats.some((format) => format === "MUSIC"),
+	).map((pack) => pack.id),
+)(
+	"decodes and replays progressively longer %s song clues in Chromium",
+	async (theme) => {
+		// Keep CI independent of provider availability while exercising the real clip endpoint and decoder.
+		vi.stubGlobal("fetch", previewFixture);
+		const context = await harness.browser.newContext({
+			viewport: { width: 390, height: 844 },
 		});
-		expect(duration).toBe(2);
-		const original = await snapshot(page);
-		const answer = await target(original);
-		const wrong = original.puzzles?.options.find((o) => o.name !== answer);
-		assert(wrong);
-		// Exercise a valid action response that outlasts Vitest's default polling window.
-		await page.route(
-			"**/puzzles/actions",
-			async (route) => {
-				await new Promise((resolve) => setTimeout(resolve, 1500));
-				await route.continue();
-			},
-			{ times: 1 },
-		);
-		await page.getByLabel("Search answers").fill(wrong.name);
-		await page.getByRole("button", { name: "Guess", exact: true }).click();
-		await expect
-			.poll(
-				async () =>
-					page
-						.locator("audio")
-						.evaluate((audio) => (audio as HTMLAudioElement).duration),
-				{ timeout: 10000 },
-			)
-			.toBe(4);
-		await page.locator("audio").evaluate(async (audio) => {
-			const player = audio as HTMLAudioElement;
-			await player.play();
-			player.pause();
-		});
-		await page.getByLabel("Search answers").fill(answer);
-		await page.getByRole("button", { name: "Guess", exact: true }).click();
-		await expect
-			.poll(async () => (await snapshot(page)).puzzles?.solved)
-			.toBe(1);
-		await page.screenshot({
-			path: join(harness.artifacts, "puzzles-music-mobile.png"),
-			fullPage: true,
-		});
-	} finally {
-		vi.unstubAllGlobals();
-		await context.close();
-	}
-}, 30000);
+		const page = await context.newPage();
+		try {
+			await page.goto(harness.url);
+			await page.getByLabel("Game name", { exact: true }).fill("Melody trip");
+			await page.getByLabel("Car name", { exact: true }).fill("Music car");
+			await page.getByLabel("Game style").selectOption("puzzles");
+			await page.getByLabel("Theme", { exact: true }).selectOption(theme);
+			await page
+				.getByRole("button", { name: "Create game", exact: true })
+				.click();
+			await page
+				.getByRole("button", { name: "Start practice game", exact: true })
+				.click();
+			await page.locator("audio").waitFor();
+			const duration = await page.locator("audio").evaluate(async (audio) => {
+				const player = audio as HTMLAudioElement;
+				await player.play();
+				player.pause();
+				return player.duration;
+			});
+			expect(duration).toBe(2);
+			const original = await snapshot(page);
+			const answer = await target(original);
+			const wrong = original.puzzles?.options.find((o) => o.name !== answer);
+			assert(wrong);
+			// Exercise a valid action response that outlasts Vitest's default polling window.
+			await page.route(
+				"**/puzzles/actions",
+				async (route) => {
+					await new Promise((resolve) => setTimeout(resolve, 1500));
+					await route.continue();
+				},
+				{ times: 1 },
+			);
+			await page.getByLabel("Search answers").fill(wrong.name);
+			await page.getByRole("button", { name: "Guess", exact: true }).click();
+			await expect
+				.poll(
+					async () =>
+						page
+							.locator("audio")
+							.evaluate((audio) => (audio as HTMLAudioElement).duration),
+					{ timeout: 10000 },
+				)
+				.toBe(4);
+			await page.locator("audio").evaluate(async (audio) => {
+				const player = audio as HTMLAudioElement;
+				await player.play();
+				player.pause();
+			});
+			await page.getByLabel("Search answers").fill(answer);
+			await page.getByRole("button", { name: "Guess", exact: true }).click();
+			await expect
+				.poll(async () => (await snapshot(page)).puzzles?.solved)
+				.toBe(1);
+			await expect
+				.poll(
+					() =>
+						page
+							.locator("audio")
+							.evaluate((audio) => (audio as HTMLAudioElement).duration),
+					{ timeout: 10000 },
+				)
+				.toBe(2);
+			await page.screenshot({
+				path: join(harness.artifacts, `puzzles-${theme}-mobile.png`),
+				fullPage: true,
+			});
+		} finally {
+			vi.unstubAllGlobals();
+			await context.close();
+		}
+	},
+	30000,
+);
