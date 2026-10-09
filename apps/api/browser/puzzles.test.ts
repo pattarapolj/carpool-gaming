@@ -288,15 +288,31 @@ it("decodes and replays progressively longer music clues in Chromium", async () 
 		const answer = await target(original);
 		const wrong = original.puzzles?.options.find((o) => o.name !== answer);
 		assert(wrong);
+		// Exercise a valid action response that outlasts Vitest's default polling window.
+		await page.route(
+			"**/puzzles/actions",
+			async (route) => {
+				await new Promise((resolve) => setTimeout(resolve, 1500));
+				await route.continue();
+			},
+			{ times: 1 },
+		);
 		await page.getByLabel("Search answers").fill(wrong.name);
 		await page.getByRole("button", { name: "Guess", exact: true }).click();
 		await expect
-			.poll(async () =>
-				page
-					.locator("audio")
-					.evaluate((audio) => (audio as HTMLAudioElement).duration),
+			.poll(
+				async () =>
+					page
+						.locator("audio")
+						.evaluate((audio) => (audio as HTMLAudioElement).duration),
+				{ timeout: 10000 },
 			)
 			.toBeGreaterThan(duration);
+		await page.locator("audio").evaluate(async (audio) => {
+			const player = audio as HTMLAudioElement;
+			await player.play();
+			player.pause();
+		});
 		await page.getByLabel("Search answers").fill(answer);
 		await page.getByRole("button", { name: "Guess", exact: true }).click();
 		await expect
