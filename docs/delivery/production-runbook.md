@@ -62,16 +62,17 @@ Use a timestamped, access-restricted backup destination. Dumps contain private g
 
 ```powershell
 New-Item -ItemType Directory -Force backups | Out-Null
+$backupFile = "./backups/carpool-$(Get-Date -Format 'yyyyMMdd-HHmmss')-$([guid]::NewGuid().ToString('N')).dump"
 docker compose -p carpool-prod exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc -f /tmp/carpool.dump'
-docker compose -p carpool-prod cp db:/tmp/carpool.dump ./backups/carpool.dump
+docker compose -p carpool-prod cp db:/tmp/carpool.dump $backupFile
 docker compose -p carpool-prod exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT id,name,status FROM games; SELECT game_id,round_id,car_team_id,value,is_correct,points_awarded FROM answers ORDER BY id;"'
 ```
 
-Choose a NEW restore project name with no preexisting resources and a NEW `.env.restore` with a different localhost port/origin (for example API_PORT=3001 and FRONTEND_ORIGIN=http://localhost:3001). Keep the same database/user names or supply matching restore credentials. Do not point restore commands at the original project/volume.
+Retain `$backupFile` for the backup you selected; in a new shell, set it to that saved filename before restoring. Choose a NEW restore project name with no preexisting resources and a NEW `.env.restore` with a different localhost port/origin (for example API_PORT=3001 and FRONTEND_ORIGIN=http://localhost:3001). Keep the same database/user names or supply matching restore credentials. Do not point restore commands at the original project/volume.
 
 ```powershell
 docker compose --env-file .env.restore -p carpool-restore up -d --wait db
-docker compose --env-file .env.restore -p carpool-restore cp ./backups/carpool.dump db:/tmp/carpool.dump
+docker compose --env-file .env.restore -p carpool-restore cp $backupFile db:/tmp/carpool.dump
 docker compose --env-file .env.restore -p carpool-restore exec -T db sh -c 'pg_restore --exit-on-error --no-owner --no-acl -U "$POSTGRES_USER" -d "$POSTGRES_DB" /tmp/carpool.dump'
 docker compose --env-file .env.restore -p carpool-restore exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "SELECT id,name,status FROM games; SELECT game_id,round_id,car_team_id,value,is_correct,points_awarded FROM answers ORDER BY id;"'
 docker compose --env-file .env.restore -p carpool-restore up -d --build --wait api

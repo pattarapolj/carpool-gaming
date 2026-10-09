@@ -30,7 +30,7 @@ async function structure(db: QueryDb, schema: string) {
 		`
  WITH app_classes AS (SELECT c.* FROM pg_class c WHERE NOT EXISTS(SELECT 1 FROM pg_depend d WHERE d.classid='pg_class'::regclass AND d.objid=c.oid AND d.deptype='e'))
  SELECT 'relation' AS kind, c.relname AS name,
- jsonb_build_array(c.relkind,c.relrowsecurity,c.relforcerowsecurity) AS definition
+ jsonb_build_array(c.relkind,c.relpersistence,c.relrowsecurity,c.relforcerowsecurity) AS definition
  FROM app_classes c JOIN pg_namespace n ON n.oid=c.relnamespace
  WHERE n.nspname=$1 AND c.relkind IN ('r','p','v','m','S','f','c') AND c.relname <> 'schema_migrations'
  UNION ALL

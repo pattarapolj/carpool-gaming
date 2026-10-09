@@ -18,6 +18,43 @@ async function main() {
 	try {
 		await control.query(`CREATE SCHEMA ${schema}`);
 		created = true;
+		await db.query(migrations[0].sql, []);
+		await db.query(
+			"INSERT INTO games(id,name,join_code,host_token_hash,round_interval_seconds) VALUES($1,'Legacy durability','DURABL',$2,300)",
+			[randomUUID(), "c".repeat(64)],
+		);
+		const legacyRows = (await control.query(`SELECT * FROM ${schema}.games`))
+			.rows;
+		await db.query("ALTER TABLE games SET UNLOGGED", []);
+		await assert.rejects(migrate(db, migrations, "001_games.sql"), /structure/);
+		assert.equal(
+			(
+				await control.query("SELECT to_regclass($1) AS journal", [
+					`${schema}.schema_migrations`,
+				])
+			).rows[0].journal,
+			null,
+		);
+		assert.equal(
+			(
+				await control.query(
+					"SELECT count(*) FROM pg_namespace WHERE nspname LIKE 'carpool_reference_%'",
+				)
+			).rows[0].count,
+			"0",
+		);
+		assert.deepEqual(
+			(await control.query(`SELECT * FROM ${schema}.games`)).rows,
+			legacyRows,
+		);
+		await db.query("ALTER TABLE games SET LOGGED", []);
+		await migrate(db, migrations, "001_games.sql");
+		assert.deepEqual(
+			(await control.query(`SELECT * FROM ${schema}.games`)).rows,
+			legacyRows,
+		);
+		// Reset only this generated schema's 001 fixture for the fresh-run race.
+		await db.query("DROP TABLE games, schema_migrations", []);
 		await Promise.all([
 			migrate(db, migrations.slice(0, 3)),
 			migrate(db, migrations.slice(0, 3)),
