@@ -25,6 +25,7 @@ export function useGameSnapshot(session: GameSession | null) {
 		let reading = false;
 		let dirty = true;
 		let subscribed = false;
+		let puzzles = false;
 		setSyncError("Connecting to the game…");
 
 		async function synchronize() {
@@ -56,6 +57,7 @@ export function useGameSnapshot(session: GameSession | null) {
 				if (ack.snapshot.game.id !== gameId)
 					throw new Error("The game service returned a different game.");
 				subscribed = true;
+				puzzles = Boolean(ack.snapshot.puzzles);
 				succeeded = true;
 				setView({ key, snapshot: ack.snapshot, receivedAt: performance.now() });
 				setSyncError(null);
@@ -107,13 +109,17 @@ export function useGameSnapshot(session: GameSession | null) {
 			if (!socket.connected) socket.connect();
 			else invalidate();
 		};
-		const timer = window.setInterval(invalidate, 15000);
+		const timer = window.setInterval(() => {
+			if (puzzles || dirty) invalidate();
+		}, 2000);
+		const recoveryTimer = window.setInterval(invalidate, 15000);
 		socket.connect();
 		return () => {
 			active = false;
 			epoch++;
 			requestRefresh.current = () => {};
 			window.clearInterval(timer);
+			window.clearInterval(recoveryTimer);
 			socket.removeAllListeners();
 			socket.disconnect();
 		};

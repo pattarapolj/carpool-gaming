@@ -1,4 +1,7 @@
 import {
+	PUZZLE_FORMATS,
+	PUZZLE_PACKS,
+	type PuzzleSetup,
 	QUESTION_TOPICS,
 	type QuestionTopicId,
 	QuestionTopicIds,
@@ -24,6 +27,11 @@ export default function App() {
 	});
 	const [mode, setMode] = useState<AccessMode>(invite ? "join" : "create");
 	const [gameName, setGameName] = useState("");
+	const [playStyle, setPlayStyle] = useState("trivia");
+	const [puzzleSetup, setPuzzleSetup] = useState<PuzzleSetup>({
+		theme: "naruto",
+		format: "CHARACTER",
+	});
 	const [topics, setTopics] = useState<QuestionTopicId[]>([
 		...QuestionTopicIds,
 	]);
@@ -43,8 +51,8 @@ export default function App() {
 			const created = await createGame({
 				name: gameName,
 				teamName,
-				topics,
 				roundIntervalSeconds,
+				...(playStyle === "puzzles" ? { puzzleSetup } : { topics }),
 			});
 			activateSession({
 				gameId: created.game.id,
@@ -189,37 +197,94 @@ export default function App() {
 								required
 								value={teamName}
 							/>
-							<fieldset className="topic-picker">
-								<legend>Choose quiz topics</legend>
-								<p aria-live="polite" className="topic-selection-summary">
-									{topics.length === QuestionTopicIds.length
-										? "Mixed Topics"
-										: topics.length === 0
-											? "Choose at least one topic."
-											: `${topics.length} ${topics.length === 1 ? "topic" : "topics"} selected`}
-								</p>
-								<div className="topic-options">
-									{QuestionTopicIds.map((topic) => (
-										<label className="topic-option" key={topic}>
-											<input
-												checked={topics.includes(topic)}
-												name="topics"
-												onChange={(event) => {
-													const checked = event.currentTarget.checked;
-													setTopics((selected) =>
-														checked
-															? [...selected, topic]
-															: selected.filter((item) => item !== topic),
-													);
-												}}
-												type="checkbox"
-											/>
-											{QUESTION_TOPICS[topic]}
-										</label>
-									))}
-								</div>
-							</fieldset>
-							<label htmlFor="round-interval">Round interval</label>
+							<label htmlFor="play-style">Game style</label>
+							<select
+								id="play-style"
+								value={playStyle}
+								onChange={(event) => setPlayStyle(event.currentTarget.value)}
+							>
+								<option value="trivia">Scheduled trivia</option>
+								<option value="puzzles">Timed puzzle rounds</option>
+							</select>
+							{playStyle === "puzzles" ? (
+								<fieldset className="topic-picker">
+									<legend>Choose the opening round</legend>
+									<label htmlFor="puzzle-theme">Theme</label>
+									<select
+										id="puzzle-theme"
+										value={puzzleSetup.theme}
+										onChange={(event) => {
+											const pack = PUZZLE_PACKS.find(
+												(p) => p.id === event.currentTarget.value,
+											);
+											if (pack)
+												setPuzzleSetup({
+													theme: pack.id,
+													format: pack.formats[0],
+												});
+										}}
+									>
+										{PUZZLE_PACKS.map((p) => (
+											<option key={p.id} value={p.id}>
+												{p.name}
+											</option>
+										))}
+									</select>
+									<label htmlFor="puzzle-format">Game type</label>
+									<select
+										id="puzzle-format"
+										value={puzzleSetup.format}
+										onChange={(event) => {
+											const format = PUZZLE_PACKS.find(
+												(p) => p.id === puzzleSetup.theme,
+											)?.formats.find((f) => f === event.currentTarget.value);
+											if (format) setPuzzleSetup({ ...puzzleSetup, format });
+										}}
+									>
+										{PUZZLE_PACKS.find(
+											(p) => p.id === puzzleSetup.theme,
+										)?.formats.map((f) => (
+											<option key={f} value={f}>
+												{PUZZLE_FORMATS[f]}
+											</option>
+										))}
+									</select>
+								</fieldset>
+							) : (
+								<fieldset className="topic-picker">
+									<legend>Choose quiz topics</legend>
+									<p aria-live="polite" className="topic-selection-summary">
+										{topics.length === QuestionTopicIds.length
+											? "Mixed Topics"
+											: topics.length === 0
+												? "Choose at least one topic."
+												: `${topics.length} ${topics.length === 1 ? "topic" : "topics"} selected`}
+									</p>
+									<div className="topic-options">
+										{QuestionTopicIds.map((topic) => (
+											<label className="topic-option" key={topic}>
+												<input
+													checked={topics.includes(topic)}
+													name="topics"
+													onChange={(event) => {
+														const checked = event.currentTarget.checked;
+														setTopics((selected) =>
+															checked
+																? [...selected, topic]
+																: selected.filter((item) => item !== topic),
+														);
+													}}
+													type="checkbox"
+												/>
+												{QUESTION_TOPICS[topic]}
+											</label>
+										))}
+									</div>
+								</fieldset>
+							)}
+							<label htmlFor="round-interval">
+								{playStyle === "puzzles" ? "Round duration" : "Round interval"}
+							</label>
 							<select
 								id="round-interval"
 								name="roundIntervalSeconds"
@@ -235,8 +300,9 @@ export default function App() {
 								<option value={900}>15 minutes</option>
 							</select>
 							<p className="form-footnote">
-								The next round starts immediately when every car confirms its
-								answer. Otherwise, this interval applies.
+								{playStyle === "puzzles"
+									? "Solve as many puzzles as possible before time runs out. Last place picks the next theme; second-last picks the game type."
+									: "The next round starts immediately when every car confirms its answer. Otherwise, this interval applies."}
 							</p>
 							{error && (
 								<p className="form-error" role="alert">
@@ -245,7 +311,9 @@ export default function App() {
 							)}
 							<button
 								className="primary-button"
-								disabled={busy || topics.length === 0}
+								disabled={
+									busy || (playStyle === "trivia" && topics.length === 0)
+								}
 								type="submit"
 							>
 								{busy ? "Creating game…" : "Create game"}

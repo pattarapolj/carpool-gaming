@@ -1,5 +1,7 @@
 import {
 	type GameSnapshot,
+	PUZZLE_FORMATS,
+	PUZZLE_PACKS,
 	QUESTION_TOPICS,
 	QuestionTopicIds,
 } from "@carpool/contracts";
@@ -65,19 +67,36 @@ export function LobbyScreen({
 					<p className="join-code">{snapshot.game.joinCode}</p>
 					<SharingControls joinCode={snapshot.game.joinCode} />
 					<div className="invite-meta">
-						<span>ROUND INTERVAL</span>
+						<span>
+							{snapshot.game.puzzleSetup ? "ROUND DURATION" : "ROUND INTERVAL"}
+						</span>
 						<strong>{snapshot.game.roundIntervalSeconds / 60} MIN</strong>
 					</div>
-					<fieldset className="lobby-topics">
-						<legend>Selected quiz topics</legend>
-						<strong>
-							{selectedTopics.length === QuestionTopicIds.length
-								? "Mixed Topics"
-								: selectedTopics
-										.map((topic) => QUESTION_TOPICS[topic])
-										.join(", ")}
-						</strong>
-					</fieldset>
+					{snapshot.game.puzzleSetup ? (
+						<fieldset className="lobby-topics">
+							<legend>Opening puzzle round</legend>
+							<strong>
+								{
+									PUZZLE_PACKS.find(
+										(p) => p.id === snapshot.game.puzzleSetup?.theme,
+									)?.name
+								}{" "}
+								· {PUZZLE_FORMATS[snapshot.game.puzzleSetup.format]}
+							</strong>
+							<p>Solve the most puzzles before the timer ends.</p>
+						</fieldset>
+					) : (
+						<fieldset className="lobby-topics">
+							<legend>Selected quiz topics</legend>
+							<strong>
+								{selectedTopics.length === QuestionTopicIds.length
+									? "Mixed Topics"
+									: selectedTopics
+											.map((topic) => QUESTION_TOPICS[topic])
+											.join(", ")}
+							</strong>
+						</fieldset>
+					)}
 				</section>
 
 				<section className="roster-card" aria-labelledby="roster-heading">

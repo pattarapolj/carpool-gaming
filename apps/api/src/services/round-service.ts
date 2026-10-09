@@ -8,7 +8,9 @@ import type {
 	SubmitAnswerInput,
 	SubmittedAnswer,
 } from "../../../../packages/contracts/src/index";
+import type { PuzzleSetup } from "../../../../packages/contracts/src/puzzles";
 import type { GameDb, QueryDb, Session } from "./auth";
+import { advancePuzzleRound, finishPuzzleRound } from "./puzzle-service";
 
 type Rows<T> = { rows: T[] };
 type Clock = () => Date;
@@ -178,7 +180,7 @@ async function openLockedGame(
 	immediate = false,
 ) {
 	const games = (await tx.query(
-		"SELECT status,started_at,next_round_at,round_interval_seconds,selected_topics FROM games WHERE id::text=$1 FOR UPDATE",
+		"SELECT status,started_at,next_round_at,round_interval_seconds,selected_topics,puzzle_setup FROM games WHERE id::text=$1 FOR UPDATE",
 		[gameId],
 	)) as Rows<{
 		status: string;
@@ -186,8 +188,38 @@ async function openLockedGame(
 		next_round_at: Date;
 		round_interval_seconds: number;
 		selected_topics: string[];
+		puzzle_setup?: PuzzleSetup | null;
 	}>;
 	const game = games.rows[0];
+	if (game?.status === "WAITING" && game.puzzle_setup) {
+		const now = clock();
+		const teams = (await tx.query(
+			"SELECT id FROM car_teams WHERE game_id=$1 AND status='ACTIVE'",
+			[gameId],
+		)) as Rows<{ id: string }>;
+		const reason = timeLimitReached(game.started_at, now)
+			? "TIME_LIMIT"
+			: !teams.rows.length
+				? "NO_ACTIVE_TEAMS"
+				: null;
+		if (reason)
+			return {
+				opened: null,
+				completion: await completeLockedGame(gameId, reason, tx, now),
+			};
+		await advancePuzzleRound(
+			gameId,
+			game.puzzle_setup,
+			Math.min(
+				game.round_interval_seconds,
+				(new Date(game.started_at).getTime() + GAME_LIMIT_MS - now.getTime()) /
+					1000,
+			),
+			tx,
+			now,
+		);
+		return { opened: null, completion: null };
+	}
 	if (game?.status !== "WAITING" || !game.started_at || !game.next_round_at)
 		return { opened: null, completion: null };
 	const previous = (await tx.query(
@@ -424,6 +456,7 @@ async function completeLockedGame(
 	tx: QueryDb,
 	now: Date,
 ) {
+	await finishPuzzleRound(gameId, tx);
 	await tx.query(
 		"UPDATE games SET status='COMPLETE',next_round_at=NULL,completed_at=$2,completion_reason=$3 WHERE id=$1 AND status!='COMPLETE'",
 		[gameId, now, reason],

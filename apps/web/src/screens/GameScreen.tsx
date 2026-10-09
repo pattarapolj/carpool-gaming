@@ -1,9 +1,16 @@
-import type { EndedGame } from "@carpool/contracts";
+import type { EndedGame, PuzzleAction } from "@carpool/contracts";
 import { useEffect, useRef, useState } from "react";
-import { endGame, leaveGame, startGame, submitAnswer } from "../api";
+import {
+	endGame,
+	leaveGame,
+	sendPuzzleAction,
+	startGame,
+	submitAnswer,
+} from "../api";
 import type { GameSession } from "../session";
 import { useGameSnapshot } from "../useGameSnapshot";
 import { LobbyScreen } from "./LobbyScreen";
+import { PuzzleScreen } from "./PuzzleScreen";
 import { QuestionScreen } from "./QuestionScreen";
 import { Leaderboard, ResultsScreen } from "./ResultsScreen";
 
@@ -26,6 +33,7 @@ export function GameScreen({
 	const [left, setLeft] = useState(false);
 	const [ended, setEnded] = useState<EndedGame | null>(null);
 	const active = useRef(true);
+	const actionPending = useRef(false);
 	const confirmationButton = useRef<HTMLButtonElement>(null);
 	const lifecycleButton = useRef<HTMLButtonElement>(null);
 	const wasConfirming = useRef(false);
@@ -53,7 +61,8 @@ export function GameScreen({
 	const host = session.role === "HOST";
 
 	async function act(action: "start" | "leave" | "end") {
-		if (busy || !view) return;
+		if (actionPending.current || !view) return;
+		actionPending.current = true;
 		setBusy(true);
 		setError(null);
 		try {
@@ -75,6 +84,31 @@ export function GameScreen({
 						: "Couldn't complete that request. Try again.",
 				);
 		} finally {
+			actionPending.current = false;
+			if (active.current) {
+				setBusy(false);
+				refresh();
+			}
+		}
+	}
+	async function playPuzzle(action: PuzzleAction) {
+		if (actionPending.current) return false;
+		actionPending.current = true;
+		setBusy(true);
+		setError(null);
+		try {
+			await sendPuzzleAction(session, action);
+			return true;
+		} catch (cause) {
+			if (active.current)
+				setError(
+					cause instanceof Error
+						? cause.message
+						: "Couldn't submit. Try again.",
+				);
+			return false;
+		} finally {
+			actionPending.current = false;
 			if (active.current) {
 				setBusy(false);
 				refresh();
@@ -139,7 +173,15 @@ export function GameScreen({
 							</div>
 						</section>
 					) : null}
-					{complete ? (
+					{view.puzzles && !hasLeft ? (
+						<PuzzleScreen
+							snapshot={view}
+							receivedAt={receivedAt}
+							onAction={playPuzzle}
+							busy={busy}
+							disconnected={Boolean(syncError)}
+						/>
+					) : complete ? (
 						<ResultsScreen snapshot={view} receivedAt={receivedAt} />
 					) : hasLeft ? (
 						<Leaderboard snapshot={view} />
@@ -196,7 +238,9 @@ export function GameScreen({
 						<p>
 							{confirmation === "leave"
 								? "Answers stop immediately. Your locked answers and score remain in the game."
-								: "Locked answers will be scored. Unanswered teams receive 0 points. Every car will see the final leaderboard."}
+								: view.puzzles
+									? "Solved puzzles will be scored. Every car will see the final leaderboard."
+									: "Locked answers will be scored. Unanswered teams receive 0 points. Every car will see the final leaderboard."}
 						</p>
 						<div className="action-row">
 							<button

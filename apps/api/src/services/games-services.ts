@@ -9,6 +9,7 @@ import {
 	type StartedGame,
 } from "../../../../packages/contracts/src/index";
 import { type GameDb, hashToken, type QueryDb, type Session } from "./auth";
+import { getPuzzleView } from "./puzzle-service";
 import {
 	getLeaderboard,
 	getRoundResults,
@@ -41,6 +42,7 @@ type StartGameRow = Omit<StartedGame["game"], "startedAt" | "nextRoundAt"> & {
 };
 
 type SnapshotGameRow = {
+	puzzleSetup?: CreateGameInput["puzzleSetup"] | null;
 	id: string;
 	name: string;
 	joinCode: string;
@@ -131,6 +133,11 @@ export async function createGame(input: CreateGameInput, db: GameDb) {
 						"INSERT INTO car_teams (id, game_id, name, captain_token_hash) VALUES ($1, $2, $3, $4)",
 						[randomUUID(), game.id, input.teamName, hostTokenHash],
 					);
+				if (input.puzzleSetup)
+					await tx.query("UPDATE games SET puzzle_setup=$2 WHERE id=$1", [
+						game.id,
+						JSON.stringify(input.puzzleSetup),
+					]);
 			});
 			return { game, hostToken };
 		} catch (error) {
@@ -337,6 +344,7 @@ export async function getGameSnapshot(
 			`SELECT id, name, join_code AS "joinCode", status,
 		        round_interval_seconds AS "roundIntervalSeconds",
 		        selected_topics AS "selectedTopics",
+		        puzzle_setup AS "puzzleSetup",
 	        started_at AS "startedAt", next_round_at AS "nextRoundAt",
 	        completed_at AS "completedAt", completion_reason AS "completionReason"
 		 FROM games
@@ -436,9 +444,14 @@ export async function getGameSnapshot(
 			}
 		}
 
+		const { puzzleSetup, ...publicGame } = game;
+		const puzzles = puzzleSetup
+			? await getPuzzleView(gameId, callerTeam?.id, tx)
+			: undefined;
 		return {
 			game: {
-				...game,
+				...publicGame,
+				...(puzzleSetup ? { puzzleSetup } : {}),
 				selectedTopics: game.selectedTopics ?? [...QuestionTopicIds],
 				startedAt: toISOString(game.startedAt),
 				nextRoundAt: toISOString(game.nextRoundAt),
@@ -458,6 +471,7 @@ export async function getGameSnapshot(
 				: null,
 			leaderboard,
 			serverTime: new Date().toISOString(),
+			...(puzzles ? { puzzles } : {}),
 		};
 	});
 }
