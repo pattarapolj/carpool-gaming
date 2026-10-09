@@ -4,7 +4,7 @@
 
 **Goal:** Deliver the Carpool Quiz League MVP in small, reviewable changes.
 
-**Progress note (2026-10-08):** Foundation and release work remain partial: workspace/process/build commands, Docker Compose API/PostgreSQL, the PWA and `.github/workflows/ci.yml` are installed. Local PostgreSQL 16.14 checks establish independent-connection locking, post-wait deadlines, scoring rollback and authenticated live delivery. Lobby, round, completion/capacity and live-server behavior are implemented. Passenger gameplay, recovery, lifecycle controls and invite sharing now have component/race-test evidence; actual browser/phone acceptance remains Task 9. [Hosted live-delivery baseline CI](https://github.com/pattarapolj/carpool-gaming/actions/runs/37724585885) passed at `f6bfdc3`; this UI slice awaits fresh review and its own hosted run. Main protection remains unavailable for the current private repository (API 403 requires GitHub Pro or public visibility); no settings were changed. Release/production hosting is not complete. See [README](../../README.md) for evidence and [CONTRIBUTING](../../CONTRIBUTING.md) for the branch workflow.
+**Progress note (2026-10-09):** The MVP backend, settled live synchronization, passenger gameplay/recovery/lifecycle controls, browser acceptance and local production rehearsal are implemented and reviewed. Local October 8 evidence covers 195 ordinary tests, 15 PostgreSQL scenarios, migration safety, three browser tests and built-container restart/backup/restore; see the [dated browser checklist](../testing/manual-three-car-checklist.md), [release evidence](quality-and-release.md#7-release-rehearsal-and-execution) and [runbook](production-runbook.md). The [hosted PR verify run](https://github.com/pattarapolj/carpool-gaming/actions/runs/37885006560) passed at `87472fc`; any subsequent head still requires its own hosted checks and scoped review. Main protection remains unavailable for the current private repository (API 403 requires GitHub Pro or public visibility); no settings were changed. Public hosting and physical-phone/PWA/cellular acceptance remain unperformed, and temporary Docker recovery does not establish permanent host repair. See [CONTRIBUTING](../../CONTRIBUTING.md) for the branch workflow.
 
 The tasks are milestones, not mandatory PR sizes. Deliver one reviewable behavior per PR; a large milestone can take several PRs. Write tests for the next behavior and implement it before expanding to the next. Use the contract decision register before committing to an ambiguous contract.
 
@@ -159,7 +159,7 @@ Component verification, fresh Task 8 review and historical hosted CI passed. Tas
 
 ### Task 9: Three-car acceptance verification
 
-Delivered at `ec7b081`: two real Chromium journeys (host/three cars, recovery/reveal/lifecycle; final-slot/two-hour boundary) plus the cleanup failure-path check. The [dated checklist](../testing/manual-three-car-checklist.md) records desktop viewport evidence and explicit physical-phone/PWA/cellular limitations. Fresh task review and [historical hosted CI](https://github.com/pattarapolj/carpool-gaming/actions/runs/37753549147) passed. The existing cap/no-fit nextRoundAt producer concern remains for final broad review; it was not changed in Task 10.
+Delivered at `ec7b081`: two real Chromium journeys (host/three cars, recovery/reveal/lifecycle; final-slot/two-hour boundary) plus the cleanup failure-path check. The [dated checklist](../testing/manual-three-car-checklist.md) records desktop viewport evidence and explicit physical-phone/PWA/cellular limitations. Fresh task review and [historical hosted CI](https://github.com/pattarapolj/carpool-gaming/actions/runs/37753549147) passed. Final review accepted the existing cap/no-fit `nextRoundAt` boundary behavior; contracts section 8 clarifies that it can represent final waiting/completion rather than another playable question.
 
 ### Task 10: Production rehearsal
 
@@ -173,7 +173,7 @@ Delivered at `ec7b081`: two real Chromium journeys (host/three cars, recovery/re
 - [x] Rehearse legacy003 adoption/upgrades and pg_dump/restore into a separate runnable disposable project with stored game/answer evidence.
 - [x] Document fresh install, adoption, upgrades, health, backup/restore, compatible recovery, HTTPS proxy and single-process limit.
 
-Local rehearsal is delivered; fresh scoped/broad review and hosted checks for the resulting release head remain required. No public target/deployment, DNS changes, physical-device acceptance, automatic merge or enforced private-repository protection is claimed.
+Local rehearsal and scoped/broad review are complete; [hosted PR checks](https://github.com/pattarapolj/carpool-gaming/actions/runs/37885006560) passed at `87472fc`. Subsequent heads require their own hosted checks and scoped review. No public target/deployment, DNS changes, physical-device acceptance, automatic merge, permanent Docker-host repair or enforced private-repository protection is claimed.
 
 ## Pull-request checklist
 

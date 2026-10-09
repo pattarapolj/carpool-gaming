@@ -315,7 +315,7 @@ Also exercise overlapping deadline and final-answer operations against real Post
 | `round_revealed_reaches_every_game_member` | All connected members of that game receive the same reveal and leaderboard. |
 | `game_event_does_not_leak_to_other_game` | A socket in another game receives no event. |
 
-Implemented backend evidence lives in `apps/api/test/live-events.test.ts`: real auth/ack/rooms, both Origin transports, safe/public versus private payloads, rollback silence, final-answer/deadline/host-end/empty-bank transitions, post-commit recovery, subscribe races and pending auth/snapshot shutdown. Browser synchronization checks remain in the later UI slice.
+Implemented backend evidence lives in `apps/api/test/live-events.test.ts`: real auth/ack/rooms, both Origin transports, safe/public versus private payloads, rollback silence, final-answer/deadline/host-end/empty-bank transitions, post-commit recovery, subscribe races and pending auth/snapshot shutdown. Browser synchronization checks are implemented in the UI tests and the [Chromium acceptance checklist](manual-three-car-checklist.md).
 
 ## 7. Full game-flow test
 
@@ -347,7 +347,7 @@ Use React Testing Library. Test a screen’s visible behavior; do not test its p
 
 ### `apps/web/src/realtime.test.ts`
 
-**Resolved Task7b:** Contracts §9 specifies room-before-snapshot subscription and events as invalidations. The later UI must serialize/coalesce snapshot reads, buffer dirty events during reads, discard stale responses and reconcile every 15 seconds.
+**Resolved Tasks 7b/8/9:** Contracts §9 specifies room-before-snapshot subscription and events as invalidations. The implemented UI serializes/coalesces snapshot reads, buffers dirty events during reads, discards stale responses and reconciles every 15 seconds; component/race tests and Chromium journeys establish recovery evidence.
 
 | Test name | Expected behavior |
 |---|---|
