@@ -269,6 +269,10 @@ async function main() {
 
 		{
 			const { gameId } = await game();
+			await control.query(
+				"UPDATE games SET selected_topics=ARRAY['science'] WHERE id=$1",
+				[gameId],
+			);
 			const results = await overlap(gameId, [
 				() => openDueRound(gameId, storage, at(0)),
 				() => openDueRound(gameId, storage, at(0)),
@@ -281,11 +285,33 @@ async function main() {
 				1,
 			);
 			const rounds = await control.query(
-				"SELECT sequence,status FROM rounds WHERE game_id=$1",
+				"SELECT id,sequence,status,question_id FROM rounds WHERE game_id=$1",
 				[gameId],
 			);
-			assert.deepEqual(rounds.rows, [{ sequence: 1, status: "OPEN" }]);
-			console.log("PASS overlapping openers: one round sequence");
+			assert.equal(rounds.rows.length, 1);
+			assert.equal(rounds.rows[0].sequence, 1);
+			assert.equal(rounds.rows[0].status, "OPEN");
+			await revealDueRound(rounds.rows[0].id, storage, at(180));
+			await control.query("UPDATE games SET next_round_at=$2 WHERE id=$1", [
+				gameId,
+				at(180)(),
+			]);
+			const second = await openDueRound(gameId, storage, at(180));
+			assert(second);
+			const openedQuestions = await control.query(
+				"SELECT sequence,question_id FROM rounds WHERE game_id=$1 ORDER BY sequence",
+				[gameId],
+			);
+			assert.equal(openedQuestions.rows.length, 2);
+			assert.equal(openedQuestions.rows[0].sequence, 1);
+			assert.equal(openedQuestions.rows[1].sequence, 2);
+			assert.notEqual(
+				openedQuestions.rows[0].question_id,
+				openedQuestions.rows[1].question_id,
+			);
+			console.log(
+				"PASS overlapping openers: one sequence and no repeated question",
+			);
 		}
 
 		{
