@@ -1,4 +1,8 @@
-import type { GameSnapshot } from "@carpool/contracts";
+import {
+	type GameSnapshot,
+	QUESTION_TOPICS,
+	QuestionTopicIds,
+} from "@carpool/contracts";
 import type { GameSession } from "../session";
 import { SharingControls } from "./SharingControls";
 export function LobbyScreen({
@@ -27,6 +31,7 @@ export function LobbyScreen({
 	const activeTeamCount = snapshot.teams.length;
 	const practiceStart = activeTeamCount === 1 && practice;
 	const canStart = activeTeamCount >= 2 || (activeTeamCount === 1 && practice);
+	const selectedTopics = snapshot.game.selectedTopics;
 
 	return (
 		<section className="lobby-layout">
@@ -63,6 +68,16 @@ export function LobbyScreen({
 						<span>ROUND INTERVAL</span>
 						<strong>{snapshot.game.roundIntervalSeconds / 60} MIN</strong>
 					</div>
+					<fieldset className="lobby-topics">
+						<legend>Selected quiz topics</legend>
+						<strong>
+							{selectedTopics.length === QuestionTopicIds.length
+								? "Mixed Topics"
+								: selectedTopics
+										.map((topic) => QUESTION_TOPICS[topic])
+										.join(", ")}
+						</strong>
+					</fieldset>
 				</section>
 
 				<section className="roster-card" aria-labelledby="roster-heading">

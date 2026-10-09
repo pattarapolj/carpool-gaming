@@ -23,7 +23,9 @@ import type { GameSession } from "./session";
 export async function createGame(input: CreateGameInput): Promise<CreatedGame> {
 	const parsed = CreateGameSchema.safeParse(input);
 	if (!parsed.success)
-		throw new Error("Enter a game name and choose a round interval.");
+		throw new Error(
+			"Enter a game name, choose a topic, and set a round interval.",
+		);
 	return request("/v1/games", CreateGameResponseSchema, {
 		method: "POST",
 		body: JSON.stringify(parsed.data),

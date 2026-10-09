@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+
+import { QuestionTopicIds } from "@carpool/contracts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import App from "./App";
@@ -83,6 +85,82 @@ it("ignores malformed invite codes", () => {
 	window.history.replaceState({}, "", "/?join=AB12CD-token");
 	render(<App />);
 	expect(screen.getByLabelText("Game name")).toBeTruthy();
+});
+it("creates with named topic selections and labels the full selection Mixed Topics", async () => {
+	mocks.create.mockResolvedValue({
+		game: { id: session.gameId },
+		hostToken: "new-host",
+	});
+	snapshot.game.status = "LOBBY";
+	snapshot.round = null;
+	render(<App />);
+	expect(screen.getByText("Mixed Topics")).toBeTruthy();
+	for (const topic of [
+		"Around the World",
+		"Thailand",
+		"Food & Drinks",
+		"Weird but True",
+		"Animals & Nature",
+		"Science & Space",
+		"Taylor Swift",
+		"Breaking Bad",
+		"Logic & Clever Strategies",
+		"Lateral Thinking",
+		"Probability Puzzles",
+		"Closest Estimate",
+	]) {
+		fireEvent.click(screen.getByRole("checkbox", { name: topic }));
+	}
+	expect(screen.queryByText("Mixed Topics")).toBeNull();
+	fireEvent.change(screen.getByLabelText("Game name"), {
+		target: { value: "Marvel trip" },
+	});
+	fireEvent.change(screen.getByLabelText("Car name"), {
+		target: { value: "Blue Sedan" },
+	});
+	fireEvent.click(screen.getByRole("button", { name: "Create game" }));
+	await screen.findByText("Share this join code");
+	expect(mocks.create).toHaveBeenCalledWith({
+		name: "Marvel trip",
+		teamName: "Blue Sedan",
+		roundIntervalSeconds: 300,
+		topics: ["marvel"],
+	});
+});
+it("prevents creating a game with no selected topics", () => {
+	render(<App />);
+	for (const topic of [
+		"Around the World",
+		"Thailand",
+		"Food & Drinks",
+		"Weird but True",
+		"Animals & Nature",
+		"Science & Space",
+		"Taylor Swift",
+		"Breaking Bad",
+		"Marvel",
+		"Logic & Clever Strategies",
+		"Lateral Thinking",
+		"Probability Puzzles",
+		"Closest Estimate",
+	]) {
+		fireEvent.click(screen.getByRole("checkbox", { name: topic }));
+	}
+	expect(screen.getByText("Choose at least one topic.")).toBeTruthy();
+	expect(
+		(screen.getByRole("button", { name: "Create game" }) as HTMLButtonElement)
+			.disabled,
+	).toBe(true);
+	expect(mocks.create).not.toHaveBeenCalled();
+});
+it("restores saved topic names in the lobby snapshot", () => {
+	snapshot.game.status = "LOBBY";
+	snapshot.game.selectedTopics = ["science", "marvel"];
+	snapshot.round = null;
+	resume("HOST");
+	expect(
+		screen.getByRole("group", { name: "Selected quiz topics" }).textContent,
+	).toContain("Science & Space, Marvel");
 });
 it("keeps join inputs after an error", async () => {
 	mocks.join.mockRejectedValue(new Error("Game not found"));
@@ -211,6 +289,7 @@ it("retains game-name input after failure, then creates with the default interva
 	expect(mocks.create).toHaveBeenLastCalledWith({
 		name: "Coast drive",
 		teamName: "Host car",
+		topics: [...QuestionTopicIds],
 		roundIntervalSeconds: 300,
 	});
 	expect(

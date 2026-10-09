@@ -269,6 +269,50 @@ h2 {
 	letter-spacing: 0.18em;
 }
 
+.topic-picker {
+	margin: 0 0 19px;
+	border: 1px solid #ded8cd;
+	border-radius: 10px;
+	padding: 12px;
+}
+
+.topic-picker legend,
+.topic-selection-summary {
+	color: #45554d;
+	font-size: 12px;
+	font-weight: 700;
+}
+
+.topic-selection-summary {
+	margin: 0 0 10px;
+}
+
+.topic-options {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 7px;
+}
+
+.access-form label.topic-option {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 42px;
+	margin: 0;
+	border-radius: 8px;
+	background: #f7f4ed;
+	padding: 6px 9px;
+	font-size: 12px;
+}
+
+.access-form input[type="checkbox"] {
+	flex: 0 0 18px;
+	width: 18px;
+	min-height: 18px;
+	margin: 0;
+	accent-color: var(--green);
+}
+
 .primary-button {
 	display: flex;
 	align-items: center;
@@ -312,6 +356,29 @@ h2 {
 	color: #53655b;
 	font-size: 11px;
 	text-align: center;
+}
+
+.lobby-topics {
+	display: grid;
+	gap: 5px;
+	margin-top: 16px;
+	border: 0;
+	border-top: 1px solid rgb(25 55 47 / 13%);
+	padding: 13px 0 0;
+}
+
+.lobby-topics legend {
+	color: #53655b;
+	font-size: 9px;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.lobby-topics strong {
+	color: var(--ink);
+	font-size: 13px;
+	line-height: 1.45;
 }
 
 .footer {

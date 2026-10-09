@@ -764,3 +764,83 @@ it("the last fitting slot neutral-waits at the hard limit and the real coordinat
 		await Promise.all([host.context.close(), car.context.close()]);
 	}
 }, 60000);
+
+it("restores a Science-only selection and plays two phones only from that topic", async () => {
+	const host = await client();
+	const captain = await client();
+	try {
+		await harness.control.query(
+			"UPDATE questions SET topic_id='world' WHERE id='00000000-0000-4000-8000-000000000004'",
+		);
+		await host.page.goto(harness.url);
+		for (const topic of [
+			"Around the World",
+			"Thailand",
+			"Food & Drinks",
+			"Weird but True",
+			"Animals & Nature",
+			"Taylor Swift",
+			"Breaking Bad",
+			"Marvel",
+			"Logic & Clever Strategies",
+			"Lateral Thinking",
+			"Probability Puzzles",
+			"Closest Estimate",
+		]) {
+			await host.page.getByRole("checkbox", { name: topic }).uncheck();
+		}
+		await host.page.getByLabel("Game name").fill("Science-only convoy");
+		await host.page.getByLabel("Car name").fill("Host car");
+		await host.page.getByRole("button", { name: "Create game" }).click();
+		await visible(host.page, "Share this join code");
+		assert.deepEqual((await snapshot(host.page)).game.selectedTopics, [
+			"science",
+		]);
+		await restore(host, "Share this join code");
+		assert.deepEqual((await snapshot(host.page)).game.selectedTopics, [
+			"science",
+		]);
+		await captain.page.goto(
+			await host.page.getByLabel("Invite link").inputValue(),
+		);
+		await captain.page.getByLabel("Car name").fill("Captain car");
+		await captain.page.getByRole("button", { name: "Join game" }).click();
+		await host.page
+			.getByRole("button", { name: "Start game", exact: true })
+			.click();
+		const open = await snapshot(host.page);
+		assert(open.round?.status === "OPEN");
+		const question = (
+			await harness.control.query(
+				"SELECT q.topic_id,q.type,q.correct_answer #>> '{}' AS answer FROM rounds r JOIN questions q ON q.id=r.question_id WHERE r.id=$1",
+				[open.round.id],
+			)
+		).rows[0];
+		assert.equal(question.topic_id, "science");
+		let answer: string | number;
+		if (question.type === "TRUE_FALSE")
+			answer = question.answer === "true" ? "True" : "False";
+		else if (question.type === "ESTIMATE") answer = Number(question.answer);
+		else answer = question.answer;
+		await Promise.all(
+			[host, captain].map((person) => choose(person.page, answer)),
+		);
+		await expect
+			.poll(async () => (await snapshot(host.page)).round?.sequence)
+			.toBe(2);
+		const next = await snapshot(host.page);
+		assert(next.round?.status === "OPEN");
+		const nextTopic = (
+			await harness.control.query(
+				"SELECT q.topic_id FROM rounds r JOIN questions q ON q.id=r.question_id WHERE r.id=$1",
+				[next.round.id],
+			)
+		).rows[0].topic_id;
+		assert.equal(nextTopic, "science");
+	} finally {
+		await harness.control.query(
+			"UPDATE questions SET topic_id='science' WHERE id='00000000-0000-4000-8000-000000000004'",
+		);
+		await Promise.all([host.context.close(), captain.context.close()]);
+	}
+}, 60000);
