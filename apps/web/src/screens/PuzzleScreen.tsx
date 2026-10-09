@@ -5,7 +5,7 @@ import {
 	type PuzzleAction,
 	type PuzzleView,
 } from "@carpool/contracts";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSongClip } from "../api";
 import type { GameSession } from "../session";
 import { Countdown } from "./Countdown";
@@ -43,12 +43,13 @@ export function PuzzleScreen({
 		snapshot.teams.find((t) => t.id === id)?.name ?? "an active car";
 	const myId = snapshot.callerTeam?.id;
 	const nextPack = PUZZLE_PACKS.find((p) => p.id === view.selection.theme);
+	const skipped = view.skipped.filter((p) => p.id !== view.puzzle?.id);
 	return (
 		<section className="puzzle-round" aria-labelledby="puzzle-round-heading">
-			<p className="eyebrow">
-				ROUND {view.round.sequence} · {pack?.name}
-			</p>
 			<h2 id="puzzle-round-heading">{PUZZLE_FORMATS[view.round.format]}</h2>
+			<p className="round-meta">
+				Round {view.round.sequence} · {pack?.name}
+			</p>
 			{view.round.status === "OPEN" && !complete ? (
 				<>
 					<Countdown
@@ -60,10 +61,7 @@ export function PuzzleScreen({
 					<p className="puzzle-score" role="status">
 						Your car solved {view.solved} of {view.round.total} puzzles
 					</p>
-					<p>
-						Solve as many as you can. Every solved puzzle earns one point; there
-						is no speed bonus.
-					</p>
+					<p>One point per solve. Keep guessing until time runs out.</p>
 					{view.puzzle ? (
 						<GuessPuzzle
 							session={session}
@@ -85,16 +83,16 @@ export function PuzzleScreen({
 					{expired ? (
 						<p role="status">Time is up. Waiting for the server's results…</p>
 					) : null}
-					{view.skipped.length ? (
+					{skipped.length ? (
 						<fieldset className="skipped-puzzles">
-							<legend>Skipped puzzles ({view.skipped.length})</legend>
+							<legend>Skipped puzzles ({skipped.length})</legend>
 							<div className="action-row">
-								{view.skipped.map((p) => (
+								{skipped.map((p) => (
 									<button
 										className="quiet-button"
 										type="button"
 										key={p.id}
-										disabled={disabled || expired || p.id === view.puzzle?.id}
+										disabled={disabled || expired}
 										onClick={() =>
 											void onAction({
 												kind: "revisit",
@@ -114,19 +112,23 @@ export function PuzzleScreen({
 			) : (
 				<>
 					<h3>{complete ? "Trip complete" : "Round results"}</h3>
-					<ol className="team-list">
-						{view.results.map((t) => (
-							<li className="team-row" key={t.teamId}>
-								<span className="team-number">{t.rank}</span>
-								<span className="team-name">{t.name}</span>
-								<span className="team-score">{t.solved} solved</span>
-							</li>
-						))}
-					</ol>
-					<p>
-						Equal solved counts share a placing. Tied chooser roles are assigned
-						randomly.
-					</p>
+					{!complete ? (
+						<>
+							<ol className="team-list">
+								{view.results.map((t) => (
+									<li className="team-row" key={t.teamId}>
+										<span className="team-number">{t.rank}</span>
+										<span className="team-name">{t.name}</span>
+										<span className="team-score">{t.solved} solved</span>
+									</li>
+								))}
+							</ol>
+							<p>
+								Equal solved counts share a placing. Tied chooser roles are
+								assigned randomly.
+							</p>
+						</>
+					) : null}
 					{!complete ? (
 						<section className="next-picks">
 							<h3>Pick the next round</h3>
@@ -228,6 +230,7 @@ function GuessPuzzle({
 }) {
 	const [query, setQuery] = useState("");
 	const [answerId, setAnswerId] = useState("");
+	const answerInput = useRef<HTMLInputElement>(null);
 	const available = options.filter(
 		(o) => !puzzle.guesses.some((g) => g.name === o.name),
 	);
@@ -267,11 +270,6 @@ function GuessPuzzle({
 					Your browser cannot play this clip.
 				</audio>
 			) : null}
-			{format === "MUSIC" ? (
-				<p>
-					A passenger plays the clip when ready. Replay it as often as you like.
-				</p>
-			) : null}
 			<form
 				className="access-form"
 				onSubmit={(event) => {
@@ -293,11 +291,15 @@ function GuessPuzzle({
 				<label htmlFor="puzzle-answer">Search answers</label>
 				<input
 					id="puzzle-answer"
+					ref={answerInput}
 					autoComplete="off"
 					maxLength={100}
 					value={query}
 					disabled={disabled}
 					aria-describedby="answer-help"
+					placeholder={
+						format === "MUSIC" ? "Song title or artist" : "Type a name…"
+					}
 					onChange={(event) => {
 						const value = event.currentTarget.value;
 						setQuery(value);
@@ -310,30 +312,30 @@ function GuessPuzzle({
 						);
 					}}
 				/>
-				<p id="answer-help">
-					Type a name or choose a suggestion. Spelling does not count as a
-					guess.
-				</p>
-				<fieldset className="answer-suggestions" disabled={disabled}>
-					<legend>Answer suggestions</legend>
-					{matches.map((o) => (
-						<button
-							key={o.id}
-							type="button"
-							className="suggestion-button"
-							aria-pressed={answerId === o.id}
-							onClick={() => {
-								setQuery(o.name);
-								setAnswerId(o.id);
-							}}
-						>
-							{o.name}
-						</button>
-					))}
-					{!matches.length ? (
-						<p>No unused answers match. Try part of a name.</p>
-					) : null}
-				</fieldset>
+				<p id="answer-help">Choose a matching name, then Guess.</p>
+				{query.trim() && !answerId ? (
+					<fieldset className="answer-suggestions" disabled={disabled}>
+						<legend className="visually-hidden">Answer suggestions</legend>
+						{matches.map((o) => (
+							<button
+								key={o.id}
+								type="button"
+								className="suggestion-button"
+								aria-pressed={answerId === o.id}
+								onClick={() => {
+									setQuery(o.name);
+									setAnswerId(o.id);
+									answerInput.current?.focus();
+								}}
+							>
+								{o.name}
+							</button>
+						))}
+						{!matches.length ? (
+							<p>No unused answers match. Try part of a name.</p>
+						) : null}
+					</fieldset>
+				) : null}
 				<div className="action-row">
 					<button
 						type="submit"

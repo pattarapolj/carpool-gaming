@@ -25,6 +25,7 @@ afterAll(async () => {
 async function client(width = 390) {
 	const context = await harness.browser.newContext({
 		viewport: { width, height: 844 },
+		permissions: ["clipboard-read", "clipboard-write"],
 	});
 	const page = await context.newPage();
 	const events: { name: string; payload: unknown }[] = [];
@@ -77,6 +78,14 @@ type Client = Awaited<ReturnType<typeof client>>;
 
 async function visible(page: Page, text: string) {
 	await page.getByText(text, { exact: true }).waitFor({ state: "visible" });
+}
+
+async function inviteLink(page: Page) {
+	await page
+		.getByRole("button", { name: "Copy invite link", exact: true })
+		.click();
+	await visible(page, "Invite link copied.");
+	return page.evaluate(() => navigator.clipboard.readText());
 }
 
 async function snapshot(page: Page) {
@@ -193,7 +202,9 @@ async function mobile(page: Page, stage: string) {
 			width: window.innerWidth,
 			scroll: document.documentElement.scrollWidth,
 			targets: [
-				...document.querySelectorAll<HTMLElement>("button,input,select,a"),
+				...document.querySelectorAll<HTMLElement>(
+					"button,input,select,a,summary",
+				),
 			]
 				.filter((element) => element.getClientRects().length)
 				.map((element) => {
@@ -255,13 +266,11 @@ it("two phones play as host and captain and restore immediate progression withou
 		await visible(host.page, "1 car");
 		assert.equal(
 			await host.page
-				.getByRole("button", { name: "Start game", exact: true })
-				.isDisabled(),
+				.getByRole("button", { name: "Start practice game", exact: true })
+				.isEnabled(),
 			true,
 		);
-		await captain.page.goto(
-			await host.page.getByLabel("Invite link").inputValue(),
-		);
+		await captain.page.goto(await inviteLink(host.page));
 		await captain.page.getByLabel("Car name").fill("Captain car");
 		await captain.page.getByRole("button", { name: "Join game" }).click();
 		await visible(host.page, "2 cars");
@@ -367,7 +376,7 @@ it("three isolated captains restore every phase, lock all answer types and recei
 		await host.page.getByLabel("Car name").fill("Host car");
 		await host.page.getByRole("button", { name: "Create game" }).click();
 		await visible(host.page, "Share this join code");
-		const invite = await host.page.getByLabel("Invite link").inputValue();
+		const invite = await inviteLink(host.page);
 		const code = new URL(invite).searchParams.get("join");
 		assert(code);
 		for (const [index, car] of cars.entries()) {
@@ -760,12 +769,13 @@ it("the last fitting slot neutral-waits at the hard limit and the real coordinat
 		await host.page.goto(harness.url);
 		await host.page.getByLabel("Game name").fill("Final slot convoy");
 		await host.page.getByLabel("Car name").fill("Host car");
+		await host.page.getByText("Quiz topics", { exact: true }).click();
 		for (const topic of await host.page.getByRole("checkbox").all())
 			if (await topic.isChecked()) await topic.uncheck();
 		await host.page.getByRole("checkbox", { name: "Around the World" }).check();
 		await host.page.getByRole("button", { name: "Create game" }).click();
 		await visible(host.page, "Share this join code");
-		await car.page.goto(await host.page.getByLabel("Invite link").inputValue());
+		await car.page.goto(await inviteLink(host.page));
 		await car.page.getByLabel("Car name").fill("Last car");
 		await car.page.getByRole("button", { name: "Join game" }).click();
 		await host.page
@@ -834,6 +844,7 @@ it("restores a Science-only selection and plays two phones only from that topic"
 			"UPDATE questions SET topic_id='world' WHERE id='00000000-0000-4000-8000-000000000004'",
 		);
 		await host.page.goto(harness.url);
+		await host.page.getByText("Quiz topics", { exact: true }).click();
 		for (const topic of [
 			"Around the World",
 			"Thailand",
@@ -861,9 +872,7 @@ it("restores a Science-only selection and plays two phones only from that topic"
 		assert.deepEqual((await snapshot(host.page)).game.selectedTopics, [
 			"science",
 		]);
-		await captain.page.goto(
-			await host.page.getByLabel("Invite link").inputValue(),
-		);
+		await captain.page.goto(await inviteLink(host.page));
 		await captain.page.getByLabel("Car name").fill("Captain car");
 		await captain.page.getByRole("button", { name: "Join game" }).click();
 		await host.page

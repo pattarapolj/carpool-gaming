@@ -24,7 +24,6 @@ export function GameScreen({
 	onHome: () => void;
 }) {
 	const { snapshot, receivedAt, syncError, refresh } = useGameSnapshot(session);
-	const [practice, setPractice] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [confirmation, setConfirmation] = useState<"leave" | "end" | null>(
@@ -66,8 +65,7 @@ export function GameScreen({
 		setBusy(true);
 		setError(null);
 		try {
-			if (action === "start")
-				await startGame(session, view.teams.length === 1 && practice);
+			if (action === "start") await startGame(session, view.teams.length === 1);
 			else if (action === "leave") {
 				await leaveGame(session);
 				if (active.current) setLeft(true);
@@ -146,21 +144,12 @@ export function GameScreen({
 					error={error}
 					syncError={null}
 					storageWarning={storageWarning}
-					practice={practice}
 					busy={busy}
-					onPracticeChange={setPractice}
 					onStart={() => void act("start")}
 				/>
 			) : (
 				<section className="lobby-layout gameplay-layout">
 					<div className="lobby-heading">
-						<p className="round-meta">
-							{host
-								? view.callerTeam
-									? "HOST & CAR CAPTAIN"
-									: "HOST VIEW"
-								: "PASSENGER CAPTAIN"}
-						</p>
 						<h1>{view.game.name}</h1>
 					</div>
 					{hasLeft ? (

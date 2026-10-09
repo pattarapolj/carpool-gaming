@@ -1,8 +1,15 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function SharingControls({ joinCode }: { joinCode: string }) {
 	const [message, setMessage] = useState<string | null>(null);
 	const input = useRef<HTMLInputElement>(null);
+	const [manual, setManual] = useState(false);
+	useEffect(() => {
+		if (manual) {
+			input.current?.focus();
+			input.current?.select();
+		}
+	}, [manual]);
 	const url = new URL(window.location.pathname, window.location.origin);
 	url.searchParams.set("join", joinCode);
 	const invite = url.toString();
@@ -12,8 +19,7 @@ export function SharingControls({ joinCode }: { joinCode: string }) {
 			await navigator.clipboard.writeText(invite);
 			setMessage("Invite link copied.");
 		} catch {
-			input.current?.focus();
-			input.current?.select();
+			setManual(true);
 			setMessage("Copy the invite link above and send it to the other cars.");
 		}
 	}
@@ -24,23 +30,29 @@ export function SharingControls({ joinCode }: { joinCode: string }) {
 				text: `Join our game with code ${joinCode}`,
 				url: invite,
 			});
-		} catch {
-			setMessage("Share didn't finish. Copy the invite link above.");
+		} catch (cause) {
+			if (cause instanceof Error && cause.name === "AbortError") return;
+			await copy();
 		}
 	}
 	return (
 		<div className="sharing-controls">
-			<label htmlFor="invite-link">Invite link</label>
-			<input ref={input} id="invite-link" readOnly value={invite} />
+			{manual ? (
+				<>
+					<label htmlFor="invite-link">Invite link</label>
+					<input ref={input} id="invite-link" readOnly value={invite} />
+				</>
+			) : null}
 			<div className="action-row">
-				<button type="button" className="quiet-button" onClick={copy}>
-					Copy invite link
-				</button>
 				{typeof navigator.share === "function" ? (
 					<button type="button" className="quiet-button" onClick={share}>
 						Share invite
 					</button>
-				) : null}
+				) : (
+					<button type="button" className="quiet-button" onClick={copy}>
+						Copy invite link
+					</button>
+				)}
 			</div>
 			{message ? (
 				<p className="share-feedback" role="status">

@@ -42,6 +42,7 @@ export default function App() {
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [storageWarning, setStorageWarning] = useState<string | null>(null);
+	const pack = PUZZLE_PACKS.find((p) => p.id === puzzleSetup.theme);
 
 	async function handleCreate(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -113,7 +114,6 @@ export default function App() {
 					storageWarning={storageWarning}
 					onHome={returnToWelcome}
 				/>
-				<Footer />
 			</main>
 		);
 	}
@@ -132,22 +132,6 @@ export default function App() {
 						One phone per car. Everyone plays together. Drivers keep their eyes
 						on the road.
 					</p>
-					<div className="journey-guide">
-						<svg viewBox="0 0 360 48" fill="none" aria-hidden="true">
-							<path
-								className="journey-line"
-								d="M12 24H120C150 24 150 8 180 8S210 24 240 24H348"
-							/>
-							<circle cx="12" cy="24" r="5" />
-							<circle cx="180" cy="8" r="5" />
-							<circle cx="348" cy="24" r="5" />
-						</svg>
-						<div>
-							<span>Host a game</span>
-							<span>Invite your cars</span>
-							<span>Play together</span>
-						</div>
-					</div>
 				</section>
 
 				<section className="access-card" aria-label="Create or join a game">
@@ -242,57 +226,78 @@ export default function App() {
 											</option>
 										))}
 									</select>
-									<label htmlFor="puzzle-format">Game type</label>
-									<select
-										id="puzzle-format"
-										value={puzzleSetup.format}
-										onChange={(event) => {
-											const format = PUZZLE_PACKS.find(
-												(p) => p.id === puzzleSetup.theme,
-											)?.formats.find((f) => f === event.currentTarget.value);
-											if (format) setPuzzleSetup({ ...puzzleSetup, format });
-										}}
-									>
-										{PUZZLE_PACKS.find(
-											(p) => p.id === puzzleSetup.theme,
-										)?.formats.map((f) => (
-											<option key={f} value={f}>
-												{PUZZLE_FORMATS[f]}
-											</option>
-										))}
-									</select>
+									{pack && pack.formats.length > 1 ? (
+										<>
+											<label htmlFor="puzzle-format">Game type</label>
+											<select
+												id="puzzle-format"
+												value={puzzleSetup.format}
+												onChange={(event) => {
+													const format = PUZZLE_PACKS.find(
+														(p) => p.id === puzzleSetup.theme,
+													)?.formats.find(
+														(f) => f === event.currentTarget.value,
+													);
+													if (format)
+														setPuzzleSetup({ ...puzzleSetup, format });
+												}}
+											>
+												{PUZZLE_PACKS.find(
+													(p) => p.id === puzzleSetup.theme,
+												)?.formats.map((f) => (
+													<option key={f} value={f}>
+														{PUZZLE_FORMATS[f]}
+													</option>
+												))}
+											</select>
+										</>
+									) : (
+										<p className="format-note">
+											{PUZZLE_FORMATS[puzzleSetup.format]}
+										</p>
+									)}
 								</fieldset>
 							) : (
-								<fieldset className="topic-picker">
-									<legend>Choose quiz topics</legend>
-									<p aria-live="polite" className="topic-selection-summary">
-										{topics.length === QuestionTopicIds.length
-											? "Mixed Topics"
-											: topics.length === 0
-												? "Choose at least one topic."
-												: `${topics.length} ${topics.length === 1 ? "topic" : "topics"} selected`}
-									</p>
-									<div className="topic-options">
-										{QuestionTopicIds.map((topic) => (
-											<label className="topic-option" key={topic}>
-												<input
-													checked={topics.includes(topic)}
-													name="topics"
-													onChange={(event) => {
-														const checked = event.currentTarget.checked;
-														setTopics((selected) =>
-															checked
-																? [...selected, topic]
-																: selected.filter((item) => item !== topic),
-														);
-													}}
-													type="checkbox"
-												/>
-												{QUESTION_TOPICS[topic]}
-											</label>
-										))}
-									</div>
-								</fieldset>
+								<details className="topic-disclosure">
+									<summary>
+										<span>Quiz topics</span>
+										<span
+											aria-live="polite"
+											className="topic-selection-summary"
+										>
+											{topics.length === QuestionTopicIds.length
+												? "Mixed Topics"
+												: topics.length === 0
+													? "Choose at least one topic."
+													: `${topics.length} ${topics.length === 1 ? "topic" : "topics"} selected`}
+										</span>
+									</summary>
+									<fieldset className="topic-picker">
+										<legend className="visually-hidden">
+											Choose quiz topics
+										</legend>
+										<div className="topic-options">
+											{QuestionTopicIds.map((topic) => (
+												<label className="topic-option" key={topic}>
+													<input
+														checked={topics.includes(topic)}
+														name="topics"
+														onChange={(event) => {
+															const checked = event.currentTarget.checked;
+															setTopics((selected) =>
+																checked
+																	? [...selected, topic]
+																	: selected.filter((item) => item !== topic),
+															);
+														}}
+														type="checkbox"
+													/>
+													{QUESTION_TOPICS[topic]}
+												</label>
+											))}
+										</div>
+									</fieldset>
+								</details>
 							)}
 							<label htmlFor="round-interval">
 								{playStyle === "puzzles" ? "Round duration" : "Round interval"}
@@ -396,7 +401,6 @@ export default function App() {
 					</p>
 				</section>
 			</div>
-			<Footer />
 		</main>
 	);
 }
@@ -404,20 +408,15 @@ export default function App() {
 function Brand() {
 	return (
 		<header className="topbar">
-			<a className="brand" href="/" aria-label="Carpool Quiz League home">
-				<img alt="" height="72" src="/brand/horizontal.svg" width="240" />
-			</a>
-			<span className="topbar-note">PASSENGER-POWERED PLAY</span>
+			<div className="brand">
+				<img
+					alt="Carpool Quiz League"
+					height="72"
+					src="/brand/horizontal.svg"
+					width="240"
+				/>
+			</div>
 		</header>
-	);
-}
-
-function Footer() {
-	return (
-		<footer className="footer">
-			<span>GOOD QUESTIONS. BETTER COMPANY.</span>
-			<span>TAKE THE SCENIC ROUTE</span>
-		</footer>
 	);
 }
 

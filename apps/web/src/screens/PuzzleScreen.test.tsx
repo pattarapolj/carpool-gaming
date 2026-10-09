@@ -51,6 +51,50 @@ function show(puzzles = view, act = vi.fn(async () => true)) {
 	);
 	return act;
 }
+it("shows answer suggestions only while searching for an unselected answer", () => {
+	show();
+	expect(screen.queryByRole("button", { name: "Naruto Uzumaki" })).toBeNull();
+	fireEvent.change(screen.getByLabelText("Search answers"), {
+		target: { value: "Naru" },
+	});
+	const suggestion = screen.getByRole("button", { name: "Naruto Uzumaki" });
+	suggestion.focus();
+	fireEvent.click(suggestion);
+	expect(document.activeElement).toBe(screen.getByLabelText("Search answers"));
+	expect(screen.queryByRole("button", { name: "Naruto Uzumaki" })).toBeNull();
+	expect(
+		(screen.getByRole("button", { name: "Guess" }) as HTMLButtonElement)
+			.disabled,
+	).toBe(false);
+});
+it("does not offer a revisit button for the puzzle already being played", () => {
+	if (!view.puzzle) throw new Error("Missing fixture puzzle");
+	show({ ...view, skipped: [{ id: view.puzzle.id, number: 1 }] });
+	expect(screen.queryByRole("button", { name: "Revisit puzzle 1" })).toBeNull();
+});
+it("shows one final score list when a puzzle game completes", () => {
+	render(
+		<PuzzleScreen
+			snapshot={{
+				...gameSnapshot(),
+				game: { ...gameSnapshot().game, status: "COMPLETE" },
+				puzzles: {
+					...view,
+					round: { ...view.round, status: "RESULTS" },
+					puzzle: null,
+				},
+			}}
+			receivedAt={performance.now()}
+			onAction={vi.fn(async () => true)}
+			busy={false}
+			disconnected={false}
+		/>,
+	);
+	expect(screen.getAllByRole("list")).toHaveLength(1);
+	expect(
+		screen.getByRole("heading", { name: "Final leaderboard" }),
+	).toBeTruthy();
+});
 it("uses canonical suggestions instead of submitting misspelled text", async () => {
 	const act = show();
 	fireEvent.change(screen.getByLabelText("Search answers"), {

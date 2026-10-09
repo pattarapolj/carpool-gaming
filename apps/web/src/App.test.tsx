@@ -86,6 +86,30 @@ it("ignores malformed invite codes", () => {
 	render(<App />);
 	expect(screen.getByLabelText("Game name")).toBeTruthy();
 });
+it("keeps mixed topics collapsed until the host wants to customize them", () => {
+	render(<App />);
+	expect(document.querySelector("details")?.open).toBe(false);
+	fireEvent.click(screen.getByText("Quiz topics", { exact: true }));
+	expect(document.querySelector("details")?.open).toBe(true);
+	expect(
+		screen.getByRole("checkbox", { name: "Around the World" }),
+	).toBeTruthy();
+});
+it("shows a game-type choice only when the selected theme supports several", () => {
+	render(<App />);
+	fireEvent.change(screen.getByLabelText("Game style"), {
+		target: { value: "puzzles" },
+	});
+	expect(screen.queryByLabelText("Game type")).toBeNull();
+	fireEvent.change(screen.getByLabelText("Theme"), {
+		target: { value: "animals" },
+	});
+	expect(screen.getByLabelText("Game type")).toBeTruthy();
+	fireEvent.change(screen.getByLabelText("Theme"), {
+		target: { value: "melodies" },
+	});
+	expect(screen.queryByLabelText("Game type")).toBeNull();
+});
 it("creates with named topic selections and labels the full selection Mixed Topics", async () => {
 	mocks.create.mockResolvedValue({
 		game: { id: session.gameId },
@@ -95,6 +119,7 @@ it("creates with named topic selections and labels the full selection Mixed Topi
 	snapshot.round = null;
 	render(<App />);
 	expect(screen.getByText("Mixed Topics")).toBeTruthy();
+	fireEvent.click(screen.getByText("Quiz topics", { exact: true }));
 	for (const topic of [
 		"Around the World",
 		"Thailand",
@@ -129,6 +154,7 @@ it("creates with named topic selections and labels the full selection Mixed Topi
 });
 it("prevents creating a game with no selected topics", () => {
 	render(<App />);
+	fireEvent.click(screen.getByText("Quiz topics", { exact: true }));
 	for (const topic of [
 		"Around the World",
 		"Thailand",
@@ -274,11 +300,13 @@ it("offers a token-free invite URL and visible clipboard fallback", async () => 
 	snapshot.game.status = "LOBBY";
 	snapshot.round = null;
 	resume("HOST");
+	expect(screen.queryByLabelText("Invite link")).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: "Copy invite link" }));
+	await screen.findByText(/Copy the invite link above/);
 	const input = screen.getByLabelText("Invite link") as HTMLInputElement;
 	expect(input.value).toBe(`${location.origin}/?join=AB12CD`);
 	expect(input.value).not.toContain(session.token);
-	fireEvent.click(screen.getByRole("button", { name: "Copy invite link" }));
-	await screen.findByText(/Copy the invite link above/);
+	expect(document.activeElement).toBe(input);
 });
 it.each([null, "2026-10-08T09:59:00.000Z", "2026-10-08T12:00:00.000Z"])(
 	"shows neutral standby for schedule %s",
@@ -321,11 +349,7 @@ it("retains game-name input after failure, then creates with the default interva
 		topics: [...QuestionTopicIds],
 		roundIntervalSeconds: 300,
 	});
-	expect(
-		(screen.getByRole("button", { name: "Start game" }) as HTMLButtonElement)
-			.disabled,
-	).toBe(true);
-	fireEvent.click(screen.getByLabelText("Play solo practice"));
+	expect(screen.queryByLabelText("Play solo practice")).toBeNull();
 	fireEvent.click(screen.getByRole("button", { name: "Start practice game" }));
 	expect(mocks.start).toHaveBeenCalledWith(
 		{ gameId: session.gameId, role: "HOST", token: "new-host" },
@@ -365,19 +389,19 @@ it("restores a completed LEFT captain without answer or leave controls", () => {
 });
 
 it("uses native sharing and clipboard with the same token-free URL", async () => {
-	const share = vi.fn().mockResolvedValue(undefined);
+	const share = vi.fn().mockRejectedValue(new Error("Sharing unavailable"));
 	const writeText = vi.fn().mockResolvedValue(undefined);
 	vi.stubGlobal("navigator", { share, clipboard: { writeText } });
 	snapshot.game.status = "LOBBY";
 	snapshot.round = null;
 	resume("HOST");
+	expect(screen.queryByRole("button", { name: "Copy invite link" })).toBeNull();
 	fireEvent.click(screen.getByRole("button", { name: "Share invite" }));
 	expect(share).toHaveBeenCalledWith({
 		title: "Carpool Quiz League",
 		text: "Join our game with code AB12CD",
 		url: `${location.origin}/?join=AB12CD`,
 	});
-	fireEvent.click(screen.getByRole("button", { name: "Copy invite link" }));
 	await screen.findByText("Invite link copied.");
 	expect(writeText).toHaveBeenCalledWith(`${location.origin}/?join=AB12CD`);
 });

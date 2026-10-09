@@ -13,9 +13,7 @@ export function LobbyScreen({
 	error,
 	syncError,
 	storageWarning,
-	practice,
 	busy,
-	onPracticeChange,
 	onStart,
 }: {
 	session: GameSession;
@@ -23,16 +21,14 @@ export function LobbyScreen({
 	error: string | null;
 	syncError: string | null;
 	storageWarning: string | null;
-	practice: boolean;
 	busy: boolean;
-	onPracticeChange: (value: boolean) => void;
 	onStart: () => void;
 }) {
 	const host = session.role === "HOST";
 	const waiting = snapshot.game.status === "LOBBY";
 	const activeTeamCount = snapshot.teams.length;
-	const practiceStart = activeTeamCount === 1 && practice;
-	const canStart = activeTeamCount >= 2 || (activeTeamCount === 1 && practice);
+	const practiceStart = activeTeamCount === 1;
+	const canStart = activeTeamCount >= 1;
 	const selectedTopics = snapshot.game.selectedTopics;
 
 	return (
@@ -48,16 +44,34 @@ export function LobbyScreen({
 				</p>
 			</div>
 
+			{host && waiting ? (
+				<section className="start-panel" aria-label="Start the game">
+					<p className="start-hint">
+						{practiceStart
+							? "Start solo now, or wait for another car."
+							: "Ready when your cars are."}
+					</p>
+					<button
+						className="primary-button start-button"
+						aria-busy={busy}
+						disabled={busy || !canStart}
+						onClick={onStart}
+						type="button"
+					>
+						{busy
+							? "Starting…"
+							: practiceStart
+								? "Start practice game"
+								: "Start game"}
+						<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+							<path d="M5 12h14m-6-6 6 6-6 6" />
+						</svg>
+					</button>
+				</section>
+			) : null}
+
 			<div className="lobby-grid">
 				<section className="invite-card" aria-labelledby="join-code-heading">
-					<div className="invite-topline">
-						<span
-							className={`status-pill ${waiting ? "status-open" : "status-live"}`}
-						>
-							<span aria-hidden="true" className="status-dot" />
-							{waiting ? "LOBBY OPEN" : "GAME STARTED"}
-						</span>
-					</div>
 					<h2 id="join-code-heading">Share this join code</h2>
 					<p>Each car joins as one team, with a passenger as captain.</p>
 					<p className="join-code">{snapshot.game.joinCode}</p>
@@ -125,11 +139,7 @@ export function LobbyScreen({
 						<p className="sync-error" role="status">
 							{syncError}
 						</p>
-					) : (
-						<p className="sync-note" aria-live="polite">
-							Roster updates automatically.
-						</p>
-					)}
+					) : null}
 				</section>
 			</div>
 
@@ -144,43 +154,7 @@ export function LobbyScreen({
 				</p>
 			)}
 
-			{host && waiting ? (
-				<section className="start-panel" aria-label="Start the game">
-					<div>
-						<h2>Take it from here.</h2>
-					</div>
-					<div className="start-actions">
-						{activeTeamCount === 1 && (
-							<label className="practice-option">
-								<input
-									checked={practice}
-									onChange={(event) =>
-										onPracticeChange(event.currentTarget.checked)
-									}
-									type="checkbox"
-								/>
-								Play solo practice
-							</label>
-						)}
-						<button
-							className="primary-button start-button"
-							aria-busy={busy}
-							disabled={busy || !canStart}
-							onClick={onStart}
-							type="button"
-						>
-							{busy
-								? "Starting…"
-								: practiceStart
-									? "Start practice game"
-									: "Start game"}
-							<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-								<path d="M5 12h14m-6-6 6 6-6 6" />
-							</svg>
-						</button>
-					</div>
-				</section>
-			) : (
+			{!host || !waiting ? (
 				<section className="wait-panel" aria-live="polite">
 					<div>
 						<strong>{host ? "Game started" : "Waiting for the host"}</strong>
@@ -191,7 +165,7 @@ export function LobbyScreen({
 						</p>
 					</div>
 				</section>
-			)}
+			) : null}
 
 			<p className="driver-note">
 				A passenger runs the phone. Drivers join the conversation hands-free.
