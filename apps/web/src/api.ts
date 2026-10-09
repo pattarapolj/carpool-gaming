@@ -11,6 +11,9 @@ import {
 	JoinGameResponseSchema,
 	JoinGameSchema,
 	LeaveGameResponseSchema,
+	type PuzzleAction,
+	PuzzleActionResponseSchema,
+	PuzzleActionSchema,
 	type StartedGame,
 	StartGameResponseSchema,
 	StartGameSchema,
@@ -165,6 +168,21 @@ export async function endGame(session: GameSession) {
 			method: "POST",
 			headers: { authorization: `Bearer ${session.token}` },
 			body: "{}",
+		},
+	);
+}
+
+export async function sendPuzzleAction(
+	session: GameSession,
+	action: PuzzleAction,
+) {
+	return request(
+		`/v1/games/${encodeURIComponent(session.gameId)}/puzzles/actions`,
+		PuzzleActionResponseSchema,
+		{
+			method: "POST",
+			headers: { authorization: `Bearer ${session.token}` },
+			body: JSON.stringify(PuzzleActionSchema.parse(action)),
 		},
 	);
 }

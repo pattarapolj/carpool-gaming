@@ -23,12 +23,14 @@ import {
 	leaveGameTransition,
 	RoundError,
 } from "../services/round-service";
+import { registerPuzzleRoutes } from "./puzzles";
 import { registerRoundRoutes } from "./rounds";
 
 export const registerGameRoutes: FastifyPluginAsync<{
 	db: GameDb;
 	live: LivePublisher;
 }> = async (app, { db, live }) => {
+	app.register(registerPuzzleRoutes, { db });
 	app.register(registerRoundRoutes, { db, live });
 	app.post<{ Params: { gameId: string } }>(
 		"/v1/games/:gameId/end",

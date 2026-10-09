@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { PuzzleSetupSchema, PuzzleViewSchema } from "./puzzles";
+
+export * from "./puzzles";
 
 export const QuestionTopicIds = [
 	"world",
@@ -58,6 +61,7 @@ export type LeftGame = z.infer<typeof LeaveGameResponseSchema>;
 
 export const CreateGameSchema = z.object({
 	name: z.string().trim().min(1).max(60),
+	puzzleSetup: PuzzleSetupSchema.optional(),
 	topics: SelectedTopicsSchema,
 	teamName: z.string().trim().min(1).max(60).optional(),
 	roundIntervalSeconds: z.union([
@@ -194,6 +198,7 @@ export const GameSnapshotSchema = z
 		game: z.object({
 			id: z.string().uuid(),
 			name: z.string(),
+			puzzleSetup: PuzzleSetupSchema.optional(),
 			selectedTopics: SelectedTopicsSchema,
 			joinCode: z.string().length(6),
 			status: z.enum(["LOBBY", "WAITING", "COMPLETE"]),
@@ -228,6 +233,7 @@ export const GameSnapshotSchema = z
 		callerTeam: SnapshotTeamSchema.nullable(),
 		leaderboard: LeaderboardSchema,
 		serverTime: z.string().datetime(),
+		puzzles: PuzzleViewSchema.optional(),
 	})
 	.strict();
 

@@ -993,3 +993,90 @@ h2 {
 		transition: none;
 	}
 }
+:root {
+	--puzzle-match: #e0eddf;
+	--puzzle-partial: #f7e9bc;
+	--puzzle-miss: #f5e1db;
+}
+
+.puzzle-round {
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: 18px;
+	padding: clamp(18px, 4vw, 36px);
+}
+.gameplay-layout .puzzle-round h2,
+.gameplay-layout .puzzle-round h3 {
+	margin-bottom: 12px;
+}
+.puzzle-score {
+	font-weight: 700;
+}
+.puzzle-image {
+	display: block;
+	width: min(100%, 320px);
+	height: auto;
+	image-rendering: pixelated;
+	border-radius: 12px;
+	margin: 20px auto;
+}
+.guess-puzzle audio {
+	width: 100%;
+	margin: 18px 0;
+}
+.answer-suggestions {
+	display: grid;
+	gap: 6px;
+	max-height: 240px;
+	overflow-y: auto;
+	padding: 8px;
+	border: 1px solid var(--line);
+	border-radius: 10px;
+}
+.suggestion-button {
+	min-height: 48px;
+	text-align: left;
+	padding: 10px 14px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: #fffefa;
+	color: inherit;
+	cursor: pointer;
+}
+.suggestion-button[aria-pressed="true"] {
+	background: var(--puzzle-match);
+	border-color: var(--green);
+}
+.guess-history {
+	padding-left: 22px;
+}
+.guess-history > li {
+	margin: 16px 0;
+}
+.attribute-feedback {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	list-style: none;
+	padding: 8px 0;
+}
+.attribute-feedback li {
+	padding: 10px;
+	border-radius: 8px;
+}
+.feedback-match {
+	background: var(--puzzle-match);
+}
+.feedback-partial {
+	background: var(--puzzle-partial);
+}
+.feedback-miss {
+	background: var(--puzzle-miss);
+}
+.skipped-puzzles,
+.next-picks {
+	margin: 24px 0;
+	padding: 16px;
+	border: 1px solid var(--line);
+	border-radius: 12px;
+}

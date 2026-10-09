@@ -162,6 +162,35 @@ it("restores saved topic names in the lobby snapshot", () => {
 		screen.getByRole("group", { name: "Selected quiz topics" }).textContent,
 	).toContain("Science & Space, Marvel");
 });
+
+it("creates a puzzle round after switching from an empty trivia topic selection", async () => {
+	mocks.create.mockResolvedValue({
+		game: { id: session.gameId },
+		hostToken: "new-host",
+	});
+	snapshot.game.status = "LOBBY";
+	snapshot.round = null;
+	render(<App />);
+	for (const checkbox of screen.getAllByRole("checkbox"))
+		fireEvent.click(checkbox);
+	fireEvent.change(screen.getByLabelText("Game style"), {
+		target: { value: "puzzles" },
+	});
+	fireEvent.change(screen.getByLabelText("Game name"), {
+		target: { value: "Puzzle trip" },
+	});
+	fireEvent.change(screen.getByLabelText("Car name"), {
+		target: { value: "Blue Sedan" },
+	});
+	fireEvent.click(screen.getByRole("button", { name: "Create game" }));
+	await screen.findByText("Share this join code");
+	expect(mocks.create).toHaveBeenCalledWith({
+		name: "Puzzle trip",
+		teamName: "Blue Sedan",
+		roundIntervalSeconds: 300,
+		puzzleSetup: { theme: "naruto", format: "CHARACTER" },
+	});
+});
 it("keeps join inputs after an error", async () => {
 	mocks.join.mockRejectedValue(new Error("Game not found"));
 	render(<App />);

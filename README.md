@@ -4,6 +4,14 @@ Carpool Quiz League is a slow-paced, passenger-operated trivia game for groups t
 
 ## Game model
 
+Choose **Timed puzzle rounds** under **Game style** when creating a game to play the new format. The host selects the opening theme/game type and a 5, 10 or 15-minute round duration. Each car works independently through the same shuffled puzzles, guessing until correct or skipping and revisiting with saved clues. Searchable answer suggestions accept alternate names without charging spelling mistakes. The server awards one point per solved puzzle when the round ends; the trip leaderboard carries scores forward.
+
+Last place chooses the next theme, then second-last chooses a supported game type and starts the next round. Equal scores share a placing; saved random tie ordering assigns two distinct chooser roles. Solo practice chooses both. If a chooser leaves, an active car takes over. Host end, reconnect and the two-hour trip limit still apply.
+
+Starter packs include 16 Naruto characters with attribute feedback, eight original animal pictures plus animal trivia, and ten familiar melodies with locally synthesized audio. Wrong picture guesses reveal finer detail; wrong music guesses unlock longer clips. Packs are finite: after reaching the end, revisit skipped puzzles or wait for the timer. These are small starter libraries, not an extensive anime-image or commercial-song collection. To expand them, update the server-only catalog and the supported pack list in the shared contracts.
+
+The existing **Scheduled trivia** style remains available:
+
 - A host creates a private game, names their car, selects one or more quiz topics and shares its join code.
 - Each car joins as one team and designates a passenger as captain.
 - Every car receives the same question at the same scheduled time.

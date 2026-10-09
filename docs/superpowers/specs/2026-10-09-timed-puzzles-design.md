@@ -1,0 +1,11 @@
+# Timed puzzle rounds
+
+User-approved direction: rounds contain several puzzles of one theme and format. Cars solve independently against the same server deadline and shuffled sequence. Repeated guesses provide private feedback; searchable canonical answers and aliases prevent spelling mistakes. Skipping preserves guesses and clues and grants no extra clue. Solved puzzles award one point, once. Round results rank by solved count; equal scores share a placing. Random persisted tie ordering assigns last-place theme and second-last format selectors to distinct active cars. A single car chooses both in practice.
+
+The host selects the opening theme and format. After each round, the selected car chooses a theme, then the other chooses a supported format, which opens the next round. Duration uses the existing 5/10/15-minute choice as a round length in puzzle mode. The trip leaderboard accumulates solved counts. Existing host end, leave, reconnect and two-hour ceiling apply. Teams exhausting a finite pack may revisit skipped puzzles or wait; no repeated points within a round.
+
+Keep scheduled trivia available. Puzzle mode adds persistent rounds and per-team progress rather than changing the immutable trivia answer model. Server snapshots contain only the caller's guesses, clues and puzzle; answer keys and media identifiers stay server-side. The coordinator closes rounds and applies scores under the existing game-first transaction lock. Requests carry round and puzzle IDs, preventing stale guesses and selections from mutating newer rounds.
+
+Starter packs: Naruto character deduction (text attributes); animals picture reveal and trivia; familiar melodies music guessing using locally synthesized clips. Each pack advertises supported formats. No external media downloads, new dependencies, accounts or voting. These small packs establish playable mechanics; expanding and editorially reviewing the library is separate work.
+
+Verification: PostgreSQL-compatible persistence tests cover deadlines, retries, scoring, selection permissions, skipped progress, private snapshots, lifecycle and all formats; React tests cover suggestions, input submission, skipped selection and results; existing suites, lint, types and builds must remain green. Real PostgreSQL and browser checks run when their local services are available.

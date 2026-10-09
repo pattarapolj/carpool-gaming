@@ -33,7 +33,9 @@ it("upgrades existing games and questions without changing released content, and
 			new URL("../migrations/006_question_topics.sql", import.meta.url),
 			"utf8",
 		);
-		expect(migrations.at(-1)?.name).toBe("006_question_topics.sql");
+		expect(
+			migrations.some((entry) => entry.name === "006_question_topics.sql"),
+		).toBe(true);
 		await db.exec(migration);
 		expect((await db.query("SELECT selected_topics FROM games")).rows).toEqual([
 			{ selected_topics: [...QuestionTopicIds] },

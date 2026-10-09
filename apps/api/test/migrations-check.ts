@@ -172,7 +172,7 @@ async function main() {
 		const failed = [
 			...migrations,
 			{
-				name: "007_failure.sql",
+				name: "999_failure.sql",
 				sql: "CREATE TABLE must_rollback(id int); SELECT no_such_function();",
 			},
 		];
@@ -188,7 +188,7 @@ async function main() {
 		assert.equal(
 			(await control.query(`SELECT count(*) FROM ${schema}.schema_migrations`))
 				.rows[0].count,
-			"6",
+			String(migrations.length),
 		);
 		await control.query(`DROP TABLE ${schema}.schema_migrations`);
 		await assert.rejects(migrate(db, migrations), /adopt/);
@@ -236,7 +236,7 @@ async function main() {
 		await control.query(
 			`ALTER TABLE ${schema}.answers ENABLE TRIGGER "${trigger}"`,
 		);
-		await migrate(db, migrations, "006_question_topics.sql");
+		await migrate(db, migrations, migrations.at(-1)?.name);
 		await migrate(db, migrations);
 		assert.equal(
 			(await control.query(`SELECT name FROM ${schema}.games`)).rows[0].name,
@@ -257,12 +257,12 @@ async function main() {
 		);
 		await migrate(db, [
 			...migrations,
-			{ name: "007_failure.sql", sql: "SELECT 1" },
+			{ name: "999_failure.sql", sql: "SELECT 1" },
 		]);
 		assert.equal(
 			(await control.query(`SELECT count(*) FROM ${schema}.schema_migrations`))
 				.rows[0].count,
-			"7",
+			String(migrations.length + 1),
 		);
 		assert.equal(
 			(

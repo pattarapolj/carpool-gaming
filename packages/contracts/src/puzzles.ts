@@ -1,0 +1,153 @@
+import { z } from "zod";
+
+export const PuzzleFormatSchema = z.enum([
+	"CHARACTER",
+	"PICTURE",
+	"MUSIC",
+	"TRIVIA",
+]);
+export type PuzzleFormat = z.infer<typeof PuzzleFormatSchema>;
+export const PUZZLE_FORMATS: Record<PuzzleFormat, string> = {
+	CHARACTER: "Character detective",
+	PICTURE: "Picture reveal",
+	MUSIC: "Guess the melody",
+	TRIVIA: "Trivia",
+};
+export const PuzzleThemeSchema = z.enum(["naruto", "animals", "melodies"]);
+export const PUZZLE_PACKS = [
+	{ id: "naruto", name: "Naruto", formats: ["CHARACTER"] },
+	{ id: "animals", name: "Animals", formats: ["PICTURE", "TRIVIA"] },
+	{ id: "melodies", name: "Familiar melodies", formats: ["MUSIC"] },
+] as const;
+export const PuzzleSetupSchema = z
+	.object({ theme: PuzzleThemeSchema, format: PuzzleFormatSchema })
+	.strict()
+	.refine(
+		(value) =>
+			PUZZLE_PACKS.some(
+				(p) =>
+					p.id === value.theme &&
+					(p.formats as readonly string[]).includes(value.format),
+			),
+		"That theme does not support this game type",
+	);
+export type PuzzleSetup = z.infer<typeof PuzzleSetupSchema>;
+const RoundIdSchema = z.string().uuid();
+const PuzzleIdSchema = z.string().min(1).max(80);
+export const PuzzleActionSchema = z.discriminatedUnion("kind", [
+	z
+		.object({
+			kind: z.literal("guess"),
+			roundId: RoundIdSchema,
+			puzzleId: PuzzleIdSchema,
+			answerId: PuzzleIdSchema,
+		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal("skip"),
+			roundId: RoundIdSchema,
+			puzzleId: PuzzleIdSchema,
+		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal("revisit"),
+			roundId: RoundIdSchema,
+			puzzleId: PuzzleIdSchema,
+		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal("theme"),
+			roundId: RoundIdSchema,
+			theme: PuzzleThemeSchema,
+		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal("format"),
+			roundId: RoundIdSchema,
+			format: PuzzleFormatSchema,
+		})
+		.strict(),
+]);
+export type PuzzleAction = z.infer<typeof PuzzleActionSchema>;
+export const PuzzleActionResponseSchema = z
+	.object({ ok: z.literal(true) })
+	.strict();
+export const PuzzleViewSchema = z
+	.object({
+		round: z
+			.object({
+				id: RoundIdSchema,
+				sequence: z.number().int().positive(),
+				theme: PuzzleThemeSchema,
+				format: PuzzleFormatSchema,
+				status: z.enum(["OPEN", "RESULTS"]),
+				startsAt: z.string().datetime(),
+				endsAt: z.string().datetime(),
+				total: z.number().int().positive(),
+			})
+			.strict(),
+		solved: z.number().int().nonnegative(),
+		puzzle: z
+			.object({
+				id: PuzzleIdSchema,
+				number: z.number().int().positive(),
+				prompt: z.string(),
+				media: z.string().nullable(),
+				guesses: z.array(
+					z
+						.object({
+							name: z.string(),
+							correct: z.boolean(),
+							feedback: z.array(
+								z
+									.object({
+										attribute: z.string(),
+										value: z.string(),
+										match: z.enum(["MATCH", "PARTIAL", "MISS"]),
+									})
+									.strict(),
+							),
+						})
+						.strict(),
+				),
+			})
+			.strict()
+			.nullable(),
+		skipped: z.array(
+			z
+				.object({ id: PuzzleIdSchema, number: z.number().int().positive() })
+				.strict(),
+		),
+		options: z.array(
+			z
+				.object({
+					id: PuzzleIdSchema,
+					name: z.string(),
+					aliases: z.array(z.string()),
+				})
+				.strict(),
+		),
+		results: z.array(
+			z
+				.object({
+					teamId: z.string().uuid(),
+					name: z.string(),
+					solved: z.number().int().nonnegative(),
+					rank: z.number().int().positive(),
+				})
+				.strict(),
+		),
+		selection: z
+			.object({
+				themeTeamId: z.string().uuid().nullable(),
+				formatTeamId: z.string().uuid().nullable(),
+				theme: PuzzleThemeSchema.nullable(),
+			})
+			.strict(),
+	})
+	.strict();
+export type PuzzleView = z.infer<typeof PuzzleViewSchema>;
