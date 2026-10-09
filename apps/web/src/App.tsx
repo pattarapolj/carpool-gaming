@@ -1,6 +1,6 @@
-import type { GameSnapshot } from "@carpool/contracts";
-import { type FormEvent, useEffect, useState } from "react";
-import { createGame, getGameSnapshot, joinGame, startGame } from "./api";
+import { type FormEvent, useState } from "react";
+import { createGame, joinGame } from "./api";
+import { GameScreen } from "./screens/GameScreen";
 import {
 	clearSession,
 	type GameSession,
@@ -13,44 +13,19 @@ type RoundInterval = 300 | 600 | 900;
 
 export default function App() {
 	const [session, setSession] = useState<GameSession | null>(loadSession);
-	const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
-	const [mode, setMode] = useState<AccessMode>("create");
+	const [invite] = useState(() => {
+		const code = new URLSearchParams(window.location.search).get("join");
+		return code && /^[A-Za-z0-9]{6}$/.test(code) ? code.toUpperCase() : "";
+	});
+	const [mode, setMode] = useState<AccessMode>(invite ? "join" : "create");
 	const [gameName, setGameName] = useState("");
 	const [roundIntervalSeconds, setRoundIntervalSeconds] =
 		useState<RoundInterval>(300);
-	const [joinCode, setJoinCode] = useState("");
+	const [joinCode, setJoinCode] = useState(invite);
 	const [teamName, setTeamName] = useState("");
-	const [practice, setPractice] = useState(false);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [syncError, setSyncError] = useState<string | null>(null);
 	const [storageWarning, setStorageWarning] = useState<string | null>(null);
-
-	useEffect(() => {
-		if (!session) return;
-		let active = true;
-		let timer: number | undefined;
-
-		const refresh = async () => {
-			try {
-				const next = await getGameSnapshot(session);
-				if (active) {
-					setSnapshot(next);
-					setSyncError(null);
-				}
-			} catch {
-				if (active) setSyncError("Can't reach the game right now. Retrying…");
-			} finally {
-				if (active) timer = window.setTimeout(refresh, 4000);
-			}
-		};
-
-		void refresh();
-		return () => {
-			active = false;
-			if (timer !== undefined) window.clearTimeout(timer);
-		};
-	}, [session]);
 
 	async function handleCreate(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -91,24 +66,8 @@ export default function App() {
 		}
 	}
 
-	async function handleStart() {
-		if (!session || !snapshot) return;
-		setBusy(true);
-		setError(null);
-		try {
-			await startGame(session, snapshot.teams.length === 1 && practice);
-			setSnapshot(await getGameSnapshot(session));
-		} catch (cause) {
-			setError(getErrorMessage(cause));
-		} finally {
-			setBusy(false);
-		}
-	}
-
 	function activateSession(next: GameSession) {
 		setSession(next);
-		setSnapshot(null);
-		setSyncError(null);
 		try {
 			saveSession(next);
 			setStorageWarning(null);
@@ -120,46 +79,23 @@ export default function App() {
 	}
 
 	function returnToWelcome() {
-		try {
-			clearSession();
-		} finally {
-			setSession(null);
-			setSnapshot(null);
-		}
+		clearSession();
+		setSession(null);
+		setError(null);
+		setStorageWarning(null);
 	}
 
 	if (session) {
 		return (
 			<main className="app-frame">
 				<Brand />
-				{snapshot ? (
-					<Lobby
-						session={session}
-						snapshot={snapshot}
-						error={error}
-						syncError={syncError}
-						storageWarning={storageWarning}
-						practice={practice}
-						busy={busy}
-						onPracticeChange={setPractice}
-						onStart={handleStart}
-					/>
-				) : (
-					<section className="loading-card" aria-live="polite">
-						<div className="loading-mark" aria-hidden="true">
-							···
-						</div>
-						<h1>{syncError ? "Reconnecting" : "Opening your game"}</h1>
-						<p>{syncError ?? "Getting the latest game state…"}</p>
-						<button
-							className="quiet-button"
-							onClick={returnToWelcome}
-							type="button"
-						>
-							Use another game
-						</button>
-					</section>
-				)}
+				<GameScreen
+					key={session.token}
+					session={session}
+					storageWarning={storageWarning}
+					onHome={returnToWelcome}
+				/>
+				<Footer />
 			</main>
 		);
 	}
@@ -320,179 +256,6 @@ function Brand() {
 			</a>
 			<span className="topbar-note">PASSENGER-POWERED PLAY</span>
 		</header>
-	);
-}
-
-function Lobby({
-	session,
-	snapshot,
-	error,
-	syncError,
-	storageWarning,
-	practice,
-	busy,
-	onPracticeChange,
-	onStart,
-}: {
-	session: GameSession;
-	snapshot: GameSnapshot;
-	error: string | null;
-	syncError: string | null;
-	storageWarning: string | null;
-	practice: boolean;
-	busy: boolean;
-	onPracticeChange: (value: boolean) => void;
-	onStart: () => void;
-}) {
-	const host = session.role === "HOST";
-	const waiting = snapshot.game.status === "LOBBY";
-	const activeTeamCount = snapshot.teams.length;
-	const practiceStart = activeTeamCount === 1 && practice;
-	const canStart = activeTeamCount >= 2 || (activeTeamCount === 1 && practice);
-
-	return (
-		<>
-			<section className="lobby-layout">
-				<div className="lobby-heading">
-					<p className="eyebrow">
-						{host ? "YOUR CONVOY" : "YOU'RE ON THE ROSTER"}
-					</p>
-					<h1>{snapshot.game.name}</h1>
-					<p className="lobby-subtitle">
-						{waiting
-							? host
-								? "Invite the other cars, then start when everyone's ready."
-								: "You're in. Settle in with your team while the host gets ready."
-							: "The game has started. Your next round will appear here."}
-					</p>
-				</div>
-
-				<div className="lobby-grid">
-					<section className="invite-card" aria-labelledby="join-code-heading">
-						<div className="invite-topline">
-							<span className="eyebrow">INVITE ANOTHER CAR</span>
-							<span
-								className={`status-pill ${waiting ? "status-open" : "status-live"}`}
-							>
-								<span aria-hidden="true" className="status-dot" />
-								{waiting ? "LOBBY OPEN" : "GAME STARTED"}
-							</span>
-						</div>
-						<h2 id="join-code-heading">Share this join code</h2>
-						<p>Each car joins as one team, with a passenger as captain.</p>
-						<p className="join-code">{snapshot.game.joinCode}</p>
-						<div className="invite-meta">
-							<span>ROUND INTERVAL</span>
-							<strong>{snapshot.game.roundIntervalSeconds / 60} MIN</strong>
-						</div>
-					</section>
-
-					<section className="roster-card" aria-labelledby="roster-heading">
-						<div className="roster-heading">
-							<div>
-								<p className="eyebrow">THE LINEUP</p>
-								<h2 id="roster-heading">Cars in the game</h2>
-							</div>
-							<span className="team-count">
-								{activeTeamCount} {activeTeamCount === 1 ? "car" : "cars"}
-							</span>
-						</div>
-						{activeTeamCount === 0 ? (
-							<p className="empty-roster">
-								No cars yet. Share your code to bring the convoy together.
-							</p>
-						) : (
-							<ul className="team-list">
-								{snapshot.teams.map((team, index) => (
-									<li className="team-row" key={team.id}>
-										<span className="team-number">
-											{String(index + 1).padStart(2, "0")}
-										</span>
-										<span className="team-name">{team.name}</span>
-										<span className="team-score">{team.score} pts</span>
-									</li>
-								))}
-							</ul>
-						)}
-						{syncError ? (
-							<p className="sync-error" role="status">
-								{syncError}
-							</p>
-						) : (
-							<p className="sync-note" aria-live="polite">
-								Roster refreshes automatically.
-							</p>
-						)}
-					</section>
-				</div>
-
-				{storageWarning && (
-					<p className="storage-warning" role="status">
-						{storageWarning}
-					</p>
-				)}
-				{error && (
-					<p className="form-error lobby-error" role="alert">
-						{error}
-					</p>
-				)}
-
-				{host && waiting ? (
-					<section className="start-panel" aria-label="Start the game">
-						<div>
-							<p className="eyebrow">WHEN YOU'RE READY</p>
-							<h2>Take it from here.</h2>
-						</div>
-						<div className="start-actions">
-							{activeTeamCount === 1 && (
-								<label className="practice-option">
-									<input
-										checked={practice}
-										onChange={(event) =>
-											onPracticeChange(event.currentTarget.checked)
-										}
-										type="checkbox"
-									/>
-									Play solo practice
-								</label>
-							)}
-							<button
-								className="primary-button start-button"
-								disabled={busy || !canStart}
-								onClick={onStart}
-								type="button"
-							>
-								{busy
-									? "Starting…"
-									: practiceStart
-										? "Start practice game"
-										: "Start game"}
-								<span aria-hidden="true">↗</span>
-							</button>
-						</div>
-					</section>
-				) : (
-					<section className="wait-panel" aria-live="polite">
-						<span aria-hidden="true" className="wait-icon">
-							✳
-						</span>
-						<div>
-							<strong>{host ? "Game started" : "Waiting for the host"}</strong>
-							<p>
-								{host
-									? "The next round will show here when the quiz begins."
-									: "The host will start the game when every car is ready."}
-							</p>
-						</div>
-					</section>
-				)}
-
-				<p className="driver-note">
-					A passenger runs the phone. Drivers join the conversation hands-free.
-				</p>
-			</section>
-			<Footer />
-		</>
 	);
 }
 

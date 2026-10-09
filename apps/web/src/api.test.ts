@@ -1,8 +1,41 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createGame, startGame } from "./api";
+import { ApiError, createGame, startGame, submitAnswer } from "./api";
+import { session } from "./test/game-fixtures";
 
 describe("lobby API client", () => {
 	afterEach(() => vi.unstubAllGlobals());
+	it("preserves duplicate status/code and sends false without a caller-supplied team identity", async () => {
+		const fetchMock = vi.fn(
+			async () =>
+				new Response(
+					JSON.stringify({
+						error: { code: "ANSWER_ALREADY_LOCKED", message: "Already locked" },
+					}),
+					{ status: 409 },
+				),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		const result = await submitAnswer(session, "round-id", false).catch(
+			(error) => error,
+		);
+		expect(result).toBeInstanceOf(ApiError);
+		expect(result).toMatchObject({
+			status: 409,
+			code: "ANSWER_ALREADY_LOCKED",
+			message: "Already locked",
+		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/v1/rounds/round-id/answers",
+			expect.objectContaining({
+				body: '{"value":false}',
+				signal: expect.any(AbortSignal),
+			}),
+		);
+		await expect(
+			submitAnswer(session, "round-id", Number.POSITIVE_INFINITY),
+		).rejects.toThrow();
+		expect(fetchMock).toHaveBeenCalledOnce();
+	});
 	it("accepts the committed COMPLETE start response from an empty bank", async () => {
 		const gameId = "e895e664-208c-4248-bde6-b4ca8a06a539";
 		const game = {

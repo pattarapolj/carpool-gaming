@@ -9,7 +9,7 @@
 	font-optical-sizing: auto;
 	font-weight: 400;
 	--ink: #19372f;
-	--ink-muted: #68756e;
+	--ink-muted: #53655b;
 	--green: #164a3d;
 	--green-dark: #103b31;
 	--orange: #e6a746;
@@ -104,7 +104,7 @@ a:focus-visible {
 
 .topbar-note,
 .footer {
-	color: #78847c;
+	color: #53655b;
 }
 
 .welcome-layout {
@@ -123,11 +123,11 @@ a:focus-visible {
 
 .eyebrow {
 	margin: 0 0 16px;
-	color: #718078;
+	color: #53655b;
 }
 
 .welcome-copy .eyebrow {
-	color: #a36f2c;
+	color: #916126;
 }
 
 h1,
@@ -152,7 +152,7 @@ h2 {
 .welcome-description {
 	max-width: 420px;
 	margin-bottom: 32px;
-	color: #66736c;
+	color: #53655b;
 	font-size: clamp(16px, 1.8vw, 19px);
 	line-height: 1.65;
 }
@@ -211,7 +211,7 @@ h2 {
 	border: 0;
 	border-radius: 9px;
 	background: transparent;
-	color: #68756e;
+	color: #53655b;
 	font-size: 13px;
 	font-weight: 700;
 }
@@ -230,7 +230,7 @@ h2 {
 
 .form-eyebrow {
 	margin-bottom: 8px;
-	color: #a36f2c;
+	color: #916126;
 }
 
 .access-form h2 {
@@ -260,7 +260,7 @@ h2 {
 }
 
 .access-form input::placeholder {
-	color: #a6aaa3;
+	color: #53655b;
 }
 
 .access-form input.join-code-input {
@@ -309,7 +309,7 @@ h2 {
 
 .form-footnote {
 	margin: 17px 0 0;
-	color: #7b857e;
+	color: #53655b;
 	font-size: 11px;
 	text-align: center;
 }
@@ -334,7 +334,7 @@ h2 {
 
 .lobby-heading .eyebrow {
 	margin-bottom: 11px;
-	color: #a36f2c;
+	color: #916126;
 }
 
 .lobby-heading h1 {
@@ -345,7 +345,7 @@ h2 {
 
 .lobby-subtitle,
 .invite-card > p {
-	color: #68756e;
+	color: #53655b;
 	font-size: 15px;
 	line-height: 1.5;
 }
@@ -475,7 +475,7 @@ h2 {
 
 .roster-heading .eyebrow {
 	margin-bottom: 7px;
-	color: #a36f2c;
+	color: #916126;
 }
 
 .roster-card h2 {
@@ -510,7 +510,7 @@ h2 {
 	place-items: center;
 	border-radius: 8px;
 	background: #f2eee5;
-	color: #8b6c3d;
+	color: #785b32;
 	font-family: var(--mono);
 	font-size: 10px;
 }
@@ -522,14 +522,14 @@ h2 {
 }
 
 .team-score {
-	color: #78847c;
+	color: #53655b;
 	font-family: var(--mono);
 	font-size: 10px;
 }
 
 .empty-roster {
 	margin: 25px 0;
-	color: #718078;
+	color: #53655b;
 	font-size: 13px;
 	line-height: 1.6;
 }
@@ -541,7 +541,7 @@ h2 {
 }
 
 .sync-note {
-	color: #8a958d;
+	color: #53655b;
 }
 
 .sync-error {
@@ -560,7 +560,7 @@ h2 {
 
 .start-panel .eyebrow {
 	margin-bottom: 5px;
-	color: #8d764e;
+	color: #795f37;
 }
 
 .start-panel h2 {
@@ -600,7 +600,7 @@ h2 {
 }
 
 .wait-icon {
-	color: #a36f2c;
+	color: #916126;
 	font-size: 24px;
 }
 
@@ -611,13 +611,13 @@ h2 {
 
 .wait-panel p {
 	margin: 4px 0 0;
-	color: #65736a;
+	color: #53655b;
 	font-size: 12px;
 }
 
 .driver-note {
 	margin: 17px 0 0;
-	color: #758178;
+	color: #53655b;
 	font-size: 11px;
 	text-align: center;
 }
@@ -628,7 +628,7 @@ h2 {
 }
 
 .storage-warning {
-	border-left: 3px solid #a36f2c;
+	border-left: 3px solid #916126;
 	background: #fbf1dc;
 	color: #715024;
 	padding: 10px 12px;
@@ -654,7 +654,7 @@ h2 {
 }
 
 .loading-card p {
-	color: #68756e;
+	color: #53655b;
 	line-height: 1.5;
 }
 
@@ -742,5 +742,187 @@ h2 {
 
 	.access-card {
 		padding-inline: 16px;
+	}
+}
+
+.gameplay-layout {
+	display: grid;
+	gap: 17px;
+}
+
+.game-card,
+.confirmation-panel {
+	min-width: 0;
+	margin: 0;
+	border: 1px solid var(--line);
+	border-radius: 21px;
+	background: var(--card);
+	padding: clamp(20px, 4vw, 32px);
+}
+
+.game-card h2 {
+	font-size: clamp(24px, 4vw, 34px);
+	line-height: 1.25;
+}
+
+.game-card p,
+.confirmation-panel p {
+	line-height: 1.6;
+}
+
+.answer-options {
+	display: grid;
+	gap: 10px;
+	min-width: 0;
+	margin: 22px 0;
+	border: 0;
+	padding: 0;
+}
+
+.answer-options legend {
+	margin-bottom: 12px;
+	font-weight: 600;
+}
+
+.answer-choice,
+.estimate-label {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 54px;
+	border: 1px solid #d8d2c7;
+	border-radius: 10px;
+	padding: 12px;
+	line-height: 1.5;
+}
+
+.answer-choice:has(input:checked) {
+	border-color: var(--green);
+	background: #e7eee8;
+}
+
+.answer-choice input {
+	flex-shrink: 0;
+	width: 20px;
+	height: 20px;
+	accent-color: var(--green);
+}
+
+.estimate-label {
+	align-items: stretch;
+	flex-direction: column;
+}
+
+.estimate-label input,
+.sharing-controls input {
+	width: 100%;
+	min-width: 0;
+	min-height: 48px;
+	border: 1px solid #d8d2c7;
+	border-radius: 8px;
+	background: var(--card);
+	color: var(--ink);
+	padding: 10px;
+	font-size: 16px;
+}
+
+.sharing-controls {
+	position: relative;
+	z-index: 1;
+	display: grid;
+	gap: 10px;
+	margin-bottom: 18px;
+}
+
+.sharing-controls label,
+.sharing-controls p {
+	font-size: 13px;
+}
+
+.sharing-controls .quiet-button {
+	border-color: #9dac9f;
+	color: var(--card);
+}
+
+.action-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 10px;
+}
+
+.result-row {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	gap: 8px 16px;
+	border-top: 1px solid var(--line);
+	padding: 14px 0;
+}
+
+.countdown,
+.left-label {
+	color: #53655b;
+}
+
+.reconnect-panel,
+.lifecycle-controls {
+	max-width: 930px;
+	margin: 20px auto;
+}
+
+.reconnect-panel {
+	border-left: 3px solid #916126;
+	background: #fbf1dc;
+	padding: 14px;
+}
+
+.reconnect-panel p {
+	line-height: 1.5;
+}
+
+.practice-option,
+.brand {
+	min-height: 48px;
+}
+
+.team-name {
+	min-width: 0;
+}
+
+.team-score {
+	flex-shrink: 0;
+}
+
+.brand img {
+	max-width: 100%;
+}
+
+.game-card,
+.lobby-heading,
+.team-name,
+.result-row,
+.confirmation-panel {
+	overflow-wrap: anywhere;
+}
+
+.invite-topline,
+.footer {
+	flex-wrap: wrap;
+}
+
+.game-card .wait-panel h3 {
+	margin-top: 0;
+}
+
+@media (max-width: 760px) {
+	.access-form input,
+	.access-form select {
+		font-size: 16px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.primary-button {
+		transition: none;
 	}
 }
