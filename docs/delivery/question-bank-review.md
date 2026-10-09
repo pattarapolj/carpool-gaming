@@ -40,7 +40,7 @@ A post-review audit corrected the following individual items while retaining the
 | 90 | Replaced the broad animal distractor question with one asking for the shark eye membrane by name, avoiding frog and crocodilian ambiguity; the cited Smithsonian page describes the membrane in some shark species. |
 | 3, 25 | Kept released question 3 unchanged and replaced the duplicate Petra question 25 with Persepolis in Iran, verified on UNESCO’s site page. |
 | 174, 178 | Replaced question 174’s repeated Hank family relationship with an actor-identification question; question 178 remains the brother-in-law fact. |
-| 18, 175 | Replaced the generic Environment Agency homepage with Visit London’s Thames-through-central-London page. Rewrote 175 to ask Walter’s Heisenberg alias and cited AMC’s explanatory article rather than the unrelated Jesse/El Camino recap. |
+| 18, 175 | Replaced the generic Environment Agency homepage with Visit London’s Thames-through-central-London page. Rewrote 175 to ask for the episode title in the Gus/Victor event described by AMC, rather than the unrelated Jesse/El Camino recap or the duplicate Heisenberg alias question. |
 
 Exact duplicate prompts are covered by the automated audit. Broader concept similarity is reviewed manually because automated semantic-duplicate checks would be brittle; the listed duplicate pairs were checked and resolved as above.
 
