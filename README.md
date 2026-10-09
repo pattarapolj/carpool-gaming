@@ -57,6 +57,14 @@ For local development without the API container, set `DATABASE_URL` and run `pnp
 
 The persistence tests use an in-memory PostgreSQL engine and do not need a running server. As of 2026-09-24, `pnpm test`, `pnpm lint`, `pnpm typecheck`, and `pnpm build` pass for create, join, start, lobby snapshot, and the PWA lobby. Live round gameplay and CI remain pending.
 
+Migration `003_round_storage.sql` adds attributed questions, rounds and immutable team submissions. It provides storage only; round delivery, answer routes and scoring are pending. `apps/api/seeds/questions.sql` contains three original-worded NASA-attributed samples, one per question type, for local development/tests; it is not a reviewed production question bank or automatically loaded seed. After applying all numbered migrations, load it once from the repository root:
+
+```powershell
+Get-Content -Raw apps/api/seeds/questions.sql | docker compose exec -T db sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+```
+
+The fixed fixture IDs intentionally reject a second load rather than overwrite stored questions. Existing database volumes require applying the new migration explicitly; Compose initialization only covers new volumes.
+
 ## Quality checks
 
 ```powershell
