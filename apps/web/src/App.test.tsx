@@ -103,7 +103,7 @@ it("creates with named topic selections and labels the full selection Mixed Topi
 		"Animals & Nature",
 		"Science & Space",
 		"Taylor Swift",
-		"Breaking Bad",
+		"Breaking Bad (full-series spoilers)",
 		"Logic & Clever Strategies",
 		"Lateral Thinking",
 		"Probability Puzzles",
@@ -137,8 +137,8 @@ it("prevents creating a game with no selected topics", () => {
 		"Animals & Nature",
 		"Science & Space",
 		"Taylor Swift",
-		"Breaking Bad",
-		"Marvel",
+		"Breaking Bad (full-series spoilers)",
+		"Marvel (MCU film spoilers)",
 		"Logic & Clever Strategies",
 		"Lateral Thinking",
 		"Probability Puzzles",
@@ -160,7 +160,7 @@ it("restores saved topic names in the lobby snapshot", () => {
 	resume("HOST");
 	expect(
 		screen.getByRole("group", { name: "Selected quiz topics" }).textContent,
-	).toContain("Science & Space, Marvel");
+	).toContain("Science & Space, Marvel (MCU film spoilers)");
 });
 
 it("creates a puzzle round after switching from an empty trivia topic selection", async () => {
