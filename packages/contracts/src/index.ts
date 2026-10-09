@@ -20,6 +20,7 @@ export type LeftGame = z.infer<typeof LeaveGameResponseSchema>;
 
 export const CreateGameSchema = z.object({
 	name: z.string().trim().min(1).max(60),
+	teamName: z.string().trim().min(1).max(60).optional(),
 	roundIntervalSeconds: z.union([
 		z.literal(300),
 		z.literal(600),
@@ -138,15 +139,16 @@ const PublicRoundSchema = z.object({
 			"Choices must match the question type",
 		),
 });
+const RevealedRoundSchema = PublicRoundSchema.extend({
+	status: z.literal("REVEALED"),
+	revealedAt: z.string().datetime(),
+	correctAnswer: AnswerValueSchema,
+	explanation: z.string(),
+	results: RoundResultsSchema,
+}).strict();
 export const SnapshotRoundSchema = z.discriminatedUnion("status", [
 	PublicRoundSchema.extend({ status: z.literal("OPEN") }).strict(),
-	PublicRoundSchema.extend({
-		status: z.literal("REVEALED"),
-		revealedAt: z.string().datetime(),
-		correctAnswer: AnswerValueSchema,
-		explanation: z.string(),
-		results: RoundResultsSchema,
-	}).strict(),
+	RevealedRoundSchema,
 ]);
 export const GameSnapshotSchema = z
 	.object({
@@ -174,6 +176,7 @@ export const GameSnapshotSchema = z
 			}),
 		),
 		round: SnapshotRoundSchema.nullable(),
+		previousRound: RevealedRoundSchema.nullable().optional(),
 		ownAnswer: z
 			.object({
 				answerId: z.string().uuid(),

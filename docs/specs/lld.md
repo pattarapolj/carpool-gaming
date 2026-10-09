@@ -1,5 +1,7 @@
 # Carpool Quiz League — Low-Level Design
 
+**Behavior amendment:** [Two-phone gameplay (2026-10-09)](../delivery/two-phone-gameplay.md) supersedes this document's spectator-host and fixed-wait rules.
+
 **Status:** Detailed design with settled MVP behavior and implemented module responsibilities.
 **Depends on:** [High-level design](design.md) and [contracts](contracts.md).  
 **Implemented by:** [Implementation plan](../delivery/implementation-plan.md)

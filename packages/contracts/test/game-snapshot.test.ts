@@ -55,6 +55,24 @@ it("accepts nullable lobby fields and both round phases", () => {
 	).toBe(true);
 });
 
+it("allows previous revealed results alongside a new question, but rejects an open previous round", () => {
+	const previousRound = {
+		...snapshot.round,
+		status: "REVEALED",
+		revealedAt: now,
+		correctAnswer: "A",
+		explanation: "Because",
+		results: [],
+	};
+	expect(
+		GameSnapshotSchema.safeParse({ ...snapshot, previousRound }).success,
+	).toBe(true);
+	expect(
+		GameSnapshotSchema.safeParse({ ...snapshot, previousRound: snapshot.round })
+			.success,
+	).toBe(false);
+});
+
 it("rejects leaked OPEN keys, results and private credentials", () => {
 	for (const extra of [
 		{ correctAnswer: "A" },

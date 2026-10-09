@@ -111,16 +111,23 @@ export async function createGame(input: CreateGameInput, db: GameDb) {
 
 	for (let attempt = 0; ; attempt++) {
 		try {
-			await db.query(
-				"INSERT INTO games (id, name, join_code, host_token_hash, round_interval_seconds) VALUES ($1, $2, $3, $4, $5)",
-				[
-					game.id,
-					game.name,
-					game.joinCode,
-					hostTokenHash,
-					input.roundIntervalSeconds,
-				],
-			);
+			await db.transaction(async (tx) => {
+				await tx.query(
+					"INSERT INTO games (id, name, join_code, host_token_hash, round_interval_seconds) VALUES ($1, $2, $3, $4, $5)",
+					[
+						game.id,
+						game.name,
+						game.joinCode,
+						hostTokenHash,
+						input.roundIntervalSeconds,
+					],
+				);
+				if (input.teamName)
+					await tx.query(
+						"INSERT INTO car_teams (id, game_id, name, captain_token_hash) VALUES ($1, $2, $3, $4)",
+						[randomUUID(), game.id, input.teamName, hostTokenHash],
+					);
+			});
 			return { game, hostToken };
 		} catch (error) {
 			const dbError = error as { code?: string; constraint?: string };
@@ -348,16 +355,15 @@ export async function getGameSnapshot(
 			[gameId],
 		)) as QueryResult<SnapshotTeamRow>;
 		const leaderboard = await getLeaderboard(gameId, tx);
-		const callerTeam =
-			session.role === "CAPTAIN"
-				? leaderboard.find((team) => team.id === session.teamId)
-				: null;
+		const callerTeam = session.teamId
+			? leaderboard.find((team) => team.id === session.teamId)
+			: null;
 		if (session.role === "CAPTAIN" && !callerTeam)
 			throw new GameSnapshotError(403, "FORBIDDEN", "Game access required");
 		const rounds = (await tx.query(
 			`SELECT r.id,r.sequence,r.status,r.starts_at,r.ends_at,r.revealed_at,r.expected_team_ids,
 		q.id AS question_id,q.type,q.prompt,q.choices,q.correct_answer,q.explanation
-		FROM rounds r JOIN questions q ON q.id=r.question_id WHERE r.game_id=$1 ORDER BY r.sequence DESC LIMIT 1`,
+		FROM rounds r JOIN questions q ON q.id=r.question_id WHERE r.game_id=$1 ORDER BY r.sequence DESC LIMIT 2`,
 			[gameId],
 		)) as QueryResult<{
 			id: string;
@@ -374,10 +380,10 @@ export async function getGameSnapshot(
 			correct_answer: string | boolean | number;
 			explanation: string;
 		}>;
-		const latest = rounds.rows[0];
 		let round: GameSnapshot["round"] = null;
+		let previousRound: GameSnapshot["previousRound"] = null;
 		let ownAnswer: GameSnapshot["ownAnswer"] = null;
-		if (latest) {
+		for (const [index, latest] of rounds.rows.entries()) {
 			const publicRound = {
 				id: latest.id,
 				sequence: latest.sequence,
@@ -390,7 +396,7 @@ export async function getGameSnapshot(
 					choices: latest.choices,
 				},
 			};
-			round =
+			const visibleRound: GameSnapshot["round"] =
 				latest.status === "OPEN"
 					? { ...publicRound, status: "OPEN" }
 					: {
@@ -406,7 +412,9 @@ export async function getGameSnapshot(
 								tx,
 							),
 						};
-			if (callerTeam) {
+			if (index === 0) round = visibleRound;
+			else if (visibleRound.status === "REVEALED") previousRound = visibleRound;
+			if (index === 0 && callerTeam) {
 				const answers = (await tx.query(
 					'SELECT id AS "answerId",value,submitted_at AS "submittedAt" FROM answers WHERE round_id=$1 AND car_team_id=$2',
 					[latest.id, callerTeam.id],
@@ -432,6 +440,7 @@ export async function getGameSnapshot(
 			},
 			teams: teamsResult.rows,
 			round,
+			previousRound,
 			ownAnswer,
 			callerTeam: callerTeam
 				? {

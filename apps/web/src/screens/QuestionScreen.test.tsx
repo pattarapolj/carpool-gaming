@@ -81,8 +81,9 @@ it("recovers caller's locked answer after a lost HTTP success without automatic 
 	expect(submit).toHaveBeenCalledOnce();
 });
 
-it("renders host question without answer controls or another car's locked value", () => {
+it("renders a legacy spectator host without answer controls", () => {
 	const snapshot = gameSnapshot();
+	snapshot.callerTeam = null;
 	render(
 		<QuestionScreen
 			session={{ ...session, role: "HOST" }}
@@ -97,6 +98,23 @@ it("renders host question without answer controls or another car's locked value"
 	expect(
 		screen.queryByRole("button", { name: "Confirm team answer" }),
 	).toBeNull();
+});
+
+it("lets the host's active car confirm an answer", async () => {
+	const submit = vi.fn().mockResolvedValue(undefined);
+	render(
+		<QuestionScreen
+			session={{ ...session, role: "HOST" }}
+			snapshot={gameSnapshot()}
+			receivedAt={0}
+			onSubmit={submit}
+			onRefresh={vi.fn()}
+		/>,
+	);
+	fireEvent.click(screen.getByLabelText("False"));
+	fireEvent.click(screen.getByRole("button", { name: "Confirm team answer" }));
+	await screen.findByText("Answer locked");
+	expect(submit).toHaveBeenCalledWith(false);
 });
 
 it("submits decimal estimates and rejects non-finite values", async () => {

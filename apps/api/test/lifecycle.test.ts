@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
-import { afterAll, beforeAll, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it, vi } from "vitest";
 import {
 	EndGameResponseSchema,
 	GameSnapshotSchema,
@@ -171,6 +171,9 @@ it("host end after results preserves scores and automatic completion survives re
 		storage,
 		f.at(1),
 	);
+	// End the immediately opened successor after the injected answer clock.
+	vi.useFakeTimers({ toFake: ["Date"] });
+	vi.setSystemTime(f.at(2)());
 	const app = buildServer(storage);
 	try {
 		const result = await app.inject({
@@ -205,6 +208,7 @@ it("host end after results preserves scores and automatic completion survives re
 		});
 	} finally {
 		await app.close();
+		vi.useRealTimers();
 	}
 });
 

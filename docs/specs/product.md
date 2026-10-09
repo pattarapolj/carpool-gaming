@@ -1,5 +1,7 @@
 # Product requirements
 
+**Behavior amendment:** [Two-phone gameplay (2026-10-09)](../delivery/two-phone-gameplay.md) supersedes this document's spectator-host and fixed-wait rules.
+
 **Status:** Approved design  
 **Date:** 2026-08-31  
 **Version:** 1.0

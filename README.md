@@ -4,12 +4,14 @@ Carpool Quiz League is a slow-paced, passenger-operated trivia game for groups t
 
 ## Game model
 
-- A host creates a private game and shares its join code.
+- A host creates a private game, names their car and shares its join code.
 - Each car joins as one team and designates a passenger as captain.
 - Every car receives the same question at the same scheduled time.
 - Captains submit one team answer before the deadline.
 - The server reveals the answer, awards points and publishes the same leaderboard to every car.
-- Rounds are intentionally spaced several minutes apart so the game remains suitable for travel.
+- When every car confirms an answer, the next round starts immediately. Otherwise, the configured schedule applies. Previous results remain visible below the next question.
+
+The [2026-10-09 behavior amendment](docs/delivery/two-phone-gameplay.md) supersedes earlier spectator-host and fixed-wait rules. More questions and topic selection are follow-up work.
 
 ## Architecture
 

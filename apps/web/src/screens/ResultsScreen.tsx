@@ -40,9 +40,11 @@ export function Leaderboard({ snapshot }: { snapshot: GameSnapshot }) {
 export function ResultsScreen({
 	snapshot,
 	receivedAt,
+	waiting = true,
 }: {
 	snapshot: GameSnapshot;
 	receivedAt: number;
+	waiting?: boolean;
 }) {
 	const round = snapshot.round;
 	const complete = snapshot.game.status === "COMPLETE";
@@ -100,7 +102,7 @@ export function ResultsScreen({
 				</section>
 			) : null}
 			<Leaderboard snapshot={snapshot} />
-			{!complete ? (
+			{!complete && waiting ? (
 				<section className="wait-panel">
 					<div>
 						<strong>Enjoy the miles between rounds.</strong>

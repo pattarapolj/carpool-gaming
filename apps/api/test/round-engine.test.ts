@@ -4,6 +4,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, it } from "vitest";
 import { type GameDb, hashToken, type Session } from "../src/services/auth";
+import { getGameSnapshot } from "../src/services/games-services";
 import * as engine from "../src/services/round-service";
 
 let db: PGlite;
@@ -83,6 +84,71 @@ it("opens one public round immediately with a full window and fixed schedule", a
 	expect(stored.rows[0].expected_team_ids).toHaveLength(3);
 });
 
+it("starts the next round on the final confirmed answer and retains results after refresh", async () => {
+	const { gameId, sessions } = await game(2);
+	const first = await engine.openDueRound(gameId, storage, at(0));
+	assert(first);
+	const pending = await engine.lockAnswer(
+		first.round.id,
+		{ value: "Jupiter" },
+		sessions[0],
+		storage,
+		at(1),
+	);
+	expect(pending.reveal).toBeNull();
+	const final = await engine.lockAnswer(
+		first.round.id,
+		{ value: "Earth" },
+		sessions[1],
+		storage,
+		at(2),
+	);
+	expect(final).toMatchObject({
+		reveal: { roundId: first.round.id },
+		opened: {
+			round: {
+				sequence: 2,
+				startsAt: "2026-10-07T10:00:02.000Z",
+				endsAt: "2026-10-07T10:01:02.000Z",
+			},
+		},
+	});
+	const refreshed = await getGameSnapshot(gameId, sessions[0], storage);
+	expect(refreshed).toMatchObject({
+		round: { status: "OPEN", sequence: 2 },
+		previousRound: {
+			id: first.round.id,
+			status: "REVEALED",
+			correctAnswer: "Jupiter",
+			results: expect.arrayContaining([
+				expect.objectContaining({
+					teamId: sessions[0].teamId,
+					pointsAwarded: 1,
+				}),
+			]),
+		},
+		ownAnswer: null,
+	});
+	expect(await engine.processDueGame(gameId, storage, at(2))).toMatchObject({
+		opened: null,
+		reveal: null,
+	});
+	await expect(
+		engine.lockAnswer(
+			first.round.id,
+			{ value: "Jupiter" },
+			sessions[1],
+			storage,
+			at(2),
+		),
+	).rejects.toMatchObject({ code: "ANSWER_ALREADY_LOCKED" });
+	expect(
+		(await getGameSnapshot(gameId, sessions[0], storage)).leaderboard.map(
+			(t) => t.score,
+		),
+	).toEqual([1, 0]);
+});
+
 it("scores correct, wrong and unanswered teams atomically at the exact deadline", async () => {
 	const { gameId, sessions } = await game();
 	const opened = await engine.openDueRound(gameId, storage, at(0));
@@ -139,16 +205,12 @@ it("reveals on all answers, scores booleans and closest estimate ties once", asy
 		"UPDATE questions SET is_active=(id <= '10000000-0000-4000-8000-000000000003')",
 	);
 	try {
+		let opened = await engine.openDueRound(gameId, storage, at(0));
 		for (const [index, values, points] of [
 			[0, ["Jupiter", "Earth", "Earth"], [1, 0, 0]],
 			[1, [true, false, false], [1, 0, 0]],
 			[2, [155, 175, 195], [1, 1, 0]],
 		] as const) {
-			const opened = await engine.openDueRound(
-				gameId,
-				storage,
-				at(index * 300),
-			);
 			assert(opened);
 			const id = opened.round.id;
 			const answers = await Promise.all(
@@ -158,7 +220,7 @@ it("reveals on all answers, scores booleans and closest estimate ties once", asy
 						{ value: values[i] },
 						session,
 						storage,
-						at(index * 300 + 1),
+						at(index + 1),
 					),
 				),
 			);
@@ -171,11 +233,12 @@ it("reveals on all answers, scores booleans and closest estimate ties once", asy
 						?.pointsAwarded,
 				).toBe(points[i]);
 			expect(reveal.nextRoundAt).toBe(
-				index === 2 ? null : at((index + 1) * 300)().toISOString(),
+				index === 2 ? null : at(index + 1)().toISOString(),
 			);
 			expect(
-				await engine.revealDueRound(id, storage, at(index * 300 + 60)),
+				await engine.revealDueRound(id, storage, at(index + 2)),
 			).toBeNull();
+			opened = answers.find((answer) => answer.opened)?.opened ?? null;
 		}
 		const scores = await db.query<{ score: number }>(
 			"SELECT score FROM car_teams WHERE game_id=$1 ORDER BY name",

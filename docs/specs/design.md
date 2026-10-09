@@ -1,5 +1,7 @@
 # High-level design
 
+**Behavior amendment:** [Two-phone gameplay (2026-10-09)](../delivery/two-phone-gameplay.md) supersedes this document's spectator-host and fixed-wait rules.
+
 **Status:** Proposed implementation architecture based on the existing MVP design; no new deployment is claimed.
 **Purpose:** Explain the major parts, their responsibilities and the reasons for the technical choices. Product requirements live in [product.md](product.md); detailed functions and schema live in [lld.md](lld.md); public behavior lives in [contracts.md](contracts.md).
 

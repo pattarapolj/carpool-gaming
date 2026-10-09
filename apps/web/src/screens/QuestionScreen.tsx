@@ -15,7 +15,6 @@ export function formatAnswer(value: AnswerValue | null) {
 }
 
 export function QuestionScreen({
-	session,
 	snapshot,
 	receivedAt,
 	onSubmit,
@@ -41,8 +40,7 @@ export function QuestionScreen({
 	}, []);
 	const round = snapshot.round;
 	if (round?.status !== "OPEN") return null;
-	const canAnswer =
-		session.role === "CAPTAIN" && snapshot.callerTeam?.status === "ACTIVE";
+	const canAnswer = snapshot.callerTeam?.status === "ACTIVE";
 	const locked = canAnswer ? (snapshot.ownAnswer?.value ?? confirmed) : null;
 	const choices: AnswerValue[] =
 		round.question.type === "TRUE_FALSE"
