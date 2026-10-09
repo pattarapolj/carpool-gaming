@@ -215,8 +215,9 @@ async function mobile(page: Page, stage: string) {
 		}));
 		assert.equal(layout.scroll, layout.width, `${stage} ${width}px overflow`);
 		for (const target of layout.targets) {
+			// Animated DOMRects can round a 48px box down by fractions of a pixel.
 			assert(
-				target.width >= 48 && target.height >= 48,
+				target.width >= 48 - 0.001 && target.height >= 48 - 0.001,
 				`${stage}: ${target.label} target ${target.width}x${target.height}`,
 			);
 		}
