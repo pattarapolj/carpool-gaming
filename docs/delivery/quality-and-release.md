@@ -4,7 +4,7 @@
 
 ## 1. Current implementation versus target
 
-As of 2026-10-09, the built PWA, Fastify API and Socket.IO run together as one unprivileged process. Lobby, full snapshots, coordinator, scoring, completion/capacity policy, live synchronization and passenger gameplay are implemented and reviewed. Journaled migrations upgrade existing databases; pre-journal schemas require explicit verified adoption. The reviewed 24-question bank is seeded idempotently. The [production runbook](production-runbook.md) contains executable installation, adoption, upgrade, backup/restore and recovery commands. Hosted checks passed at `87472fc`; subsequent heads, external hosting and physical-device acceptance remain separate gates.
+As of 2026-10-09, the built PWA, Fastify API and Socket.IO run together as one unprivileged process. Lobby, full snapshots, coordinator, scoring, completion/capacity policy, live synchronization, passenger gameplay and saved topic selection are implemented and reviewed. Journaled migrations upgrade existing databases; pre-journal schemas require explicit verified adoption. The reviewed 325-question bank is seeded idempotently, with 25 questions in each of 13 topics. The [production runbook](production-runbook.md) contains executable installation, adoption, upgrade, backup/restore and recovery commands. Hosted checks passed at `87472fc`; the current topic-selection head still requires its own hosted CI before merge readiness.
 
 Tests live in ordinary source files. CI runs those files on a clean machine for pull requests and pushes to `main`; writing a workflow does not create tests or prove unimplemented behavior.
 

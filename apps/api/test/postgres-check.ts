@@ -142,6 +142,21 @@ async function main() {
 		console.log(
 			"PASS 325-question bank loads and reloads without changing rows",
 		);
+		const fixtureQuestionIds = Array.from(
+			{ length: 25 },
+			(_, index) =>
+				`60000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+		);
+		await control.query("UPDATE questions SET is_active=false");
+		await control.query(
+			`INSERT INTO questions (id,type,prompt,choices,correct_answer,explanation,source_title,source_url,topic_id,answer_window_seconds)
+			 SELECT id,'MULTIPLE_CHOICE','PostgreSQL acceptance question '||ordinality,
+			 ' ["Jupiter","Earth","Mars","Venus"]'::jsonb,'"Jupiter"'::jsonb,
+			 'Fixture answer for the database acceptance journey.','PostgreSQL test fixture',
+			 'https://example.invalid/postgres-check','science',60
+			 FROM unnest($1::uuid[]) WITH ORDINALITY AS fixture(id,ordinality)`,
+			[fixtureQuestionIds],
+		);
 
 		{
 			const { gameId, sessions } = await game(2, new Date());
@@ -270,6 +285,10 @@ async function main() {
 		{
 			const { gameId } = await game();
 			await control.query(
+				"UPDATE questions SET is_active=(id=ANY($1::uuid[]))",
+				[fixtureQuestionIds.slice(0, 2)],
+			);
+			await control.query(
 				"UPDATE games SET selected_topics=ARRAY['science'] WHERE id=$1",
 				[gameId],
 			);
@@ -311,6 +330,10 @@ async function main() {
 			);
 			console.log(
 				"PASS overlapping openers: one sequence and no repeated question",
+			);
+			await control.query(
+				"UPDATE questions SET is_active=(id=ANY($1::uuid[]))",
+				[fixtureQuestionIds],
 			);
 		}
 
@@ -499,9 +522,9 @@ async function main() {
 				storage,
 				at(1),
 			);
-			await control.query(
-				"UPDATE questions SET is_active=(id='10000000-0000-4000-8000-000000000001')",
-			);
+			await control.query("UPDATE questions SET is_active=(id=$1)", [
+				opened.round.question.id,
+			]);
 			try {
 				const results = await overlap(gameId, [
 					() => tick(storage, at(60)),
@@ -521,7 +544,10 @@ async function main() {
 					"PASS overlapping coordinator ticks on independent connections: last-bank completion, reveal and points once",
 				);
 			} finally {
-				await control.query("UPDATE questions SET is_active=true");
+				await control.query(
+					"UPDATE questions SET is_active=(id=ANY($1::uuid[]))",
+					[fixtureQuestionIds],
+				);
 			}
 		}
 		{

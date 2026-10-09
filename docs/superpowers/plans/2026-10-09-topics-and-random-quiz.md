@@ -37,15 +37,15 @@
 
 **Interfaces:** Produce a shared `QuestionTopicIds` tuple and `QuestionTopicSchema`, names `QUESTION_TOPICS`, and `CreateGameSchema.topics?: QuestionTopicId[]`; normalize omitted to all 13 and deduplicate supplied IDs. Add `selectedTopics` to snapshot `game`, with all-topics default when older rows/callers omit it. Exclude the derived Mixed Topics label from persisted IDs.
 
-- [ ] Write failing contract tests for all 13 IDs, omitted/all default, empty rejection, unknown rejection and duplicate de-duplication.
-- [ ] Run `pnpm --filter @carpool/contracts test`; expected the new tests fail on missing topic contract.
-- [ ] Add migration tests proving questions gain `topic_id` and `answer_window_seconds`, old questions backfill to `science`/60, games gain `selected_topics`, and old games default to all 13.
-- [ ] Run `pnpm --filter @carpool/api test:migrations`; expected the new migration test fails before migration 006 exists.
-- [ ] Add migration 006 and register it in the checksummed ordered migration list; keep the existing SQL question bank/load behavior compatible.
-- [ ] Add the shared catalog and create/snapshot schemas with the specified defaults.
-- [ ] Add API create tests proving normalized selections persist and appear in the saved game without token disclosure.
-- [ ] Run contract and focused create-route tests; expected all pass.
-- [ ] Commit `feat(contracts): define game topic selection`.
+- [x] Write failing contract tests for all 13 IDs, omitted/all default, empty rejection, unknown rejection and duplicate de-duplication.
+- [x] Run `pnpm --filter @carpool/contracts test`; expected the new tests fail on missing topic contract.
+- [x] Add migration tests proving questions gain `topic_id` and `answer_window_seconds`, old questions backfill to `science`/60, games gain `selected_topics`, and old games default to all 13.
+- [x] Run `pnpm --filter @carpool/api test:migrations`; expected the new migration test fails before migration 006 exists.
+- [x] Add migration 006 and verify the existing ordered migration loader/checksum discovers it; keep the existing SQL question bank/load behavior compatible.
+- [x] Add the shared catalog and create/snapshot schemas with the specified defaults.
+- [x] Add API create tests proving normalized selections persist and appear in the saved game without token disclosure.
+- [x] Run contract and focused create-route tests; expected all pass.
+- [x] Commit `feat(contracts): define game topic selection`.
 
 ### Task 2: Reviewed question bank
 
@@ -53,24 +53,24 @@
 
 **Interfaces:** Consume Task 1's topic IDs and migrated `questions.topic_id`/`answer_window_seconds`. Seed remains checksum/reload-safe and uses existing source metadata columns. Insert 325 questions total, 25 per topic: retain 24 released science items, add one science item, and add 25 each for the other 12 IDs. Each row stores 180 seconds only for `logic`, `lateral` and `probability`, otherwise 60.
 
-- [ ] Add seed reload tests proving the new rows are repeat-safe and legacy question IDs/contents stay unchanged.
-- [ ] Run the focused question-bank suite; expected it fails on topic counts and missing content.
-- [ ] Author/review source-backed, original wording in 25-item topic batches. Preserve existing science IDs/text/source metadata. Verify 25 items per topic, globally unique IDs, no duplicates, valid answer shapes, exact durations, citation reachability, fandom canon and reasoning proofs. Record source and review result per batch.
-- [ ] Run seed tests twice against PostgreSQL; expected existing rows remain unchanged and every topic has exactly 25 questions.
-- [ ] Commit `feat(content): add the reviewed topic question bank`.
+- [x] Add seed reload tests proving the new rows are repeat-safe and legacy question IDs/contents stay unchanged.
+- [x] Run the focused question-bank suite; expected it fails on topic counts and missing content.
+- [x] Author/review source-backed, original wording in 25-item topic batches. Preserve existing science IDs/text/source metadata. Verify 25 items per topic, globally unique IDs, no duplicates, valid answer shapes, exact durations, citation reachability, fandom canon and reasoning proofs. Record source and review result per batch.
+- [x] Run seed tests twice against PostgreSQL; expected existing rows remain unchanged and every topic has exactly 25 questions.
+- [x] Commit `feat(content): add the reviewed topic question bank`.
 
 ### Task 3: Topic-filtered random round selection and timing
 
 **Files:** `apps/api/src/services/round-service.ts`; `apps/api/test/round-engine.test.ts`; `apps/api/test/postgres-check.ts`; `apps/api/test/lifecycle.test.ts`.
 
-**Interfaces:** Eligible questions satisfy `topic_id = ANY(game.selected_topics)`, are unused in the game, and have `answer_window_seconds <= remaining game time`. Select uniformly using PostgreSQL `ORDER BY random()` within the game-first transaction. Use each selected question's answer window for `round.ends_at`. Completion/exhaustion checks share the same saved-topic pool and full-window eligibility rules.
+**Interfaces:** A question can open only when it matches `topic_id = ANY(game.selected_topics)`, is unused in the game, and its answer window fits the remaining game time. Select uniformly using PostgreSQL `ORDER BY random()` within the game-first transaction. Use each selected question's answer window for `round.ends_at`. Exhaustion checks the whole saved-topic pool: if unused questions remain but none fit, wait until the hard cap, then complete with `TIME_LIMIT`.
 
-- [ ] Add failing tests for filtered topic selection, exclusion of used/unselected questions, selected-pool exhaustion, 60/180-second deadline and no-fitting-window behavior.
-- [ ] Run focused round-engine tests; expected they fail on fixed ID ordering and game-wide window.
-- [ ] Add independent Postgres overlapping-opener verification proving one sequence and no repeated question for the game.
-- [ ] Implement parameterized topic-filtered selection and database-computed deadline eligibility without changing atomic immediate advancement or answer privacy.
-- [ ] Run focused unit tests and `pnpm --filter @carpool/api test:postgres`; expected all pass.
-- [ ] Commit `feat(api): select random unused questions by topic`.
+- [x] Add failing tests for filtered topic selection, exclusion of used/unselected questions, selected-pool exhaustion, 60/180-second deadline and no-fitting-window behavior.
+- [x] Run focused round-engine tests; expected they fail on fixed ID ordering and game-wide window.
+- [x] Add independent Postgres overlapping-opener verification proving one sequence and no repeated question for the game.
+- [x] Implement parameterized topic-filtered selection and database-computed deadline eligibility without changing atomic immediate advancement or answer privacy.
+- [x] Run focused unit tests and `pnpm --filter @carpool/api test:postgres`; expected all pass.
+- [x] Commit `feat(api): select random unused questions by topic`.
 
 ### Task 4: Host topic picker and restored lobby display
 
@@ -78,20 +78,20 @@
 
 **Interfaces:** Create form submits `topics: QuestionTopicId[]`; label 13 named options and present Mixed Topics when every option is checked. Require at least one option. Lobby displays persisted topic names. API snapshots remain the source of truth through refresh/reconnect. Keep car name/host-car behavior and round interval unchanged.
 
-- [ ] Add failing React tests for multi-select, all-topic Mixed label, empty selection prevention, create payload and lobby restoration.
-- [ ] Run focused web tests; expected fail on absent picker/display.
-- [ ] Implement accessible labeled checkboxes and lobby topic list using shared catalog.
-- [ ] Add Chromium acceptance for selected topic persistence after refresh and two-phone topic-filtered play.
-- [ ] Run web tests and the focused browser journey; expected pass without viewport overflow.
-- [ ] Commit `feat(web): let hosts choose quiz topics`.
+- [x] Add failing React tests for multi-select, all-topic Mixed label, empty selection prevention, create payload and lobby restoration.
+- [x] Run focused web tests; expected fail on absent picker/display.
+- [x] Implement accessible labeled checkboxes and lobby topic list using shared catalog.
+- [x] Add Chromium acceptance for selected topic persistence after refresh and two-phone topic-filtered play.
+- [x] Run web tests and the focused browser journey; expected pass without viewport overflow.
+- [x] Commit `feat(web): let hosts choose quiz topics`.
 
 ### Task 5: Full acceptance, review and local rollout
 
 **Files:** existing package tests, PostgreSQL and browser suites, `README.md`, `docs/delivery/two-phone-gameplay.md`, and the quality/release notes.
 
-- [ ] Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm --filter @carpool/api test:postgres`, `pnpm --filter @carpool/api test:migrations` and `pnpm test:browser` with the dedicated `carpool_test` database.
-- [ ] Update feature docs for topic selection, random no-repeat behavior, windows and the 325-question bank.
-- [ ] Obtain independent contract/implementation review and content review; fix blocking findings.
+- [x] Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm --filter @carpool/api test:postgres`, `pnpm --filter @carpool/api test:migrations` and `pnpm test:browser` with the dedicated `carpool_test` database.
+- [x] Update feature docs for topic selection, random no-repeat behavior, windows and the 325-question bank.
+- [x] Obtain independent contract/implementation review and content review; fix blocking findings.
 - [ ] Commit final docs/fixes, push one reviewable PR based on the host-game PR, and confirm all hosted checks pass.
 - [ ] Apply the verified Docker build to localhost without deleting volumes; verify health and a newly created selected-topic game.
 

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
 import { loadMigrations, migrate, seed } from "../src/migrations";
 import { createPostgresDb } from "../src/server";
@@ -72,8 +73,18 @@ async function main() {
 			"INSERT INTO games(id,name,join_code,host_token_hash,round_interval_seconds) VALUES($1,'Preserve me','MIGRAT',$2,300)",
 			[gameId, "a".repeat(64)],
 		);
-		await seed(db);
-		await seed(db);
+		const seedSql = await readFile(
+			new URL("../seeds/questions.sql", import.meta.url),
+			"utf8",
+		);
+		const firstInsert = seedSql.indexOf("INSERT INTO questions");
+		const topicBankInsert = seedSql.indexOf(
+			"INSERT INTO questions",
+			firstInsert + 1,
+		);
+		const legacySeedSql = seedSql.slice(0, topicBankInsert);
+		await db.query(legacySeedSql, []);
+		await db.query(legacySeedSql, []);
 		const legacyQuestions = (
 			await control.query(`SELECT * FROM ${schema}.questions ORDER BY id`)
 		).rows;
@@ -130,10 +141,22 @@ async function main() {
 			legacyQuestions,
 		);
 		await seed(db);
+		await seed(db);
+		assert.equal(
+			(await control.query(`SELECT count(*) FROM ${schema}.questions`)).rows[0]
+				.count,
+			"325",
+		);
 		assert.deepEqual(
-			(await control.query(`SELECT * FROM ${schema}.questions ORDER BY id`))
-				.rows,
-			upgradedQuestions,
+			(
+				await control.query(
+					`SELECT * FROM ${schema}.questions WHERE id=ANY($1::uuid[]) ORDER BY id`,
+					[legacyQuestions.map((question) => question.id)],
+				)
+			).rows.map(
+				({ topic_id, answer_window_seconds, ...question }) => question,
+			),
+			legacyQuestions,
 		);
 		assert.equal(
 			(await control.query(`SELECT name FROM ${schema}.games`)).rows[0].name,
@@ -226,7 +249,7 @@ async function main() {
 		assert.equal(
 			(await control.query(`SELECT count(*) FROM ${schema}.questions`)).rows[0]
 				.count,
-			"24",
+			"325",
 		);
 		await assert.rejects(
 			db.query("UPDATE answers SET value='false' WHERE id=$1", [answerId]),
