@@ -24,6 +24,28 @@ vi.mock("./api", () => ({
 }));
 let snapshot = gameSnapshot();
 const refresh = vi.fn();
+
+it("keeps the previous result visible while the next question accepts answers", () => {
+	const previous = gameSnapshot().round;
+	if (!previous) throw new Error("Missing fixture round");
+	snapshot = {
+		...gameSnapshot(),
+		previousRound: {
+			...previous,
+			status: "REVEALED",
+			revealedAt: "2026-10-08T10:00:02.000Z",
+			correctAnswer: false,
+			explanation: "Previous round explanation",
+			results: [],
+		},
+	};
+	resume();
+	expect(
+		screen.getByRole("button", { name: "Confirm team answer" }),
+	).toBeTruthy();
+	expect(screen.getByText("Previous round explanation")).toBeTruthy();
+	expect(screen.queryByText("Enjoy the miles between rounds.")).toBeNull();
+});
 beforeEach(() => {
 	localStorage.clear();
 	window.history.replaceState({}, "", "/");
@@ -176,6 +198,9 @@ it("retains game-name input after failure, then creates with the default interva
 	fireEvent.change(screen.getByLabelText("Game name"), {
 		target: { value: "Coast drive" },
 	});
+	fireEvent.change(screen.getByLabelText("Car name"), {
+		target: { value: "Host car" },
+	});
 	fireEvent.click(screen.getByRole("button", { name: "Create game" }));
 	await screen.findByText("Try again");
 	expect((screen.getByLabelText("Game name") as HTMLInputElement).value).toBe(
@@ -185,6 +210,7 @@ it("retains game-name input after failure, then creates with the default interva
 	await screen.findByText("Share this join code");
 	expect(mocks.create).toHaveBeenLastCalledWith({
 		name: "Coast drive",
+		teamName: "Host car",
 		roundIntervalSeconds: 300,
 	});
 	expect(

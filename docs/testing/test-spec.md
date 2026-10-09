@@ -1,5 +1,7 @@
 # Test specification
 
+**Behavior amendment:** [Two-phone gameplay (2026-10-09)](../delivery/two-phone-gameplay.md) supersedes spectator-host and fixed-wait expectations below. Current tests cover host participation, immediate progression and restored previous results.
+
 **Purpose:** Own the MVP test strategy, behavior catalog, test scenarios, expected results and traceability. This is the testing specification, not a report of passing tests. Public rules come from [contracts](../specs/contracts.md); proposed functions come from the [LLD](../specs/lld.md#10-proposed-modules-and-functions).
 
 **Current feature contract:** Read the [create-game behavior contract](../specs/contracts.md) for the exact inputs, outputs, errors and state guarantees behind your current tests. It also identifies details still needing agreement.

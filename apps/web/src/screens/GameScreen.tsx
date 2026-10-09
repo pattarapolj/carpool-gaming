@@ -121,7 +121,11 @@ export function GameScreen({
 				<section className="lobby-layout gameplay-layout">
 					<div className="lobby-heading">
 						<p className="eyebrow">
-							{host ? "HOST VIEW" : "PASSENGER CAPTAIN"}
+							{host
+								? view.callerTeam
+									? "HOST & CAR CAPTAIN"
+									: "HOST VIEW"
+								: "PASSENGER CAPTAIN"}
 						</p>
 						<h1>{view.game.name}</h1>
 					</div>
@@ -140,16 +144,25 @@ export function GameScreen({
 					) : hasLeft ? (
 						<Leaderboard snapshot={view} />
 					) : view.round?.status === "OPEN" ? (
-						<QuestionScreen
-							key={view.round.id}
-							session={session}
-							snapshot={view}
-							receivedAt={receivedAt}
-							onSubmit={(value) =>
-								submitAnswer(session, view.round?.id as string, value)
-							}
-							onRefresh={refresh}
-						/>
+						<>
+							<QuestionScreen
+								key={view.round.id}
+								session={session}
+								snapshot={view}
+								receivedAt={receivedAt}
+								onSubmit={(value) =>
+									submitAnswer(session, view.round?.id as string, value)
+								}
+								onRefresh={refresh}
+							/>
+							{view.previousRound ? (
+								<ResultsScreen
+									snapshot={{ ...view, round: view.previousRound }}
+									receivedAt={receivedAt}
+									waiting={false}
+								/>
+							) : null}
+						</>
 					) : (
 						<ResultsScreen snapshot={view} receivedAt={receivedAt} />
 					)}

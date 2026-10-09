@@ -44,7 +44,10 @@ export class RoundError extends Error {
 }
 
 function captain(session: Session, gameId: string) {
-	if (session.role !== "CAPTAIN")
+	if (
+		session.role !== "CAPTAIN" &&
+		!(session.role === "HOST" && session.teamId)
+	)
 		throw new RoundError(403, "CAPTAIN_REQUIRED", "Captain access required");
 	if (session.gameId !== gameId || !session.teamId)
 		throw new RoundError(403, "FORBIDDEN", "Game access required");
@@ -127,7 +130,27 @@ export async function lockAnswer(
 			status: "locked",
 			roundEndsAt: new Date(round.ends_at).toISOString(),
 		};
-		return { answer, reveal: await revealLockedRound(round, tx, clock) };
+		const reveal = await revealLockedRound(round, tx, () => now);
+		const next =
+			reveal && !reveal.completion
+				? await openLockedGame(round.game_id, tx, () => now, true)
+				: { opened: null, completion: null };
+		const completion = reveal?.completion ?? next.completion;
+		return {
+			answer,
+			...next,
+			reveal: reveal
+				? {
+						...reveal,
+						nextRoundAt: completion
+							? null
+							: next.opened
+								? now.toISOString()
+								: reveal.nextRoundAt,
+						completion,
+					}
+				: null,
+		};
 	});
 }
 
@@ -148,7 +171,12 @@ export async function openDueRoundInTransaction(
 	return (await openLockedGame(gameId, tx, clock)).opened;
 }
 
-async function openLockedGame(gameId: string, tx: QueryDb, clock: Clock) {
+async function openLockedGame(
+	gameId: string,
+	tx: QueryDb,
+	clock: Clock,
+	immediate = false,
+) {
 	const games = (await tx.query(
 		"SELECT status,started_at,next_round_at,round_interval_seconds,question_window_seconds FROM games WHERE id::text=$1 FOR UPDATE",
 		[gameId],
@@ -203,7 +231,7 @@ async function openLockedGame(gameId: string, tx: QueryDb, clock: Clock) {
 		};
 	if (
 		!question ||
-		now < new Date(game.next_round_at) ||
+		(!immediate && now < new Date(game.next_round_at)) ||
 		now.getTime() + game.question_window_seconds * 1000 >
 			new Date(game.started_at).getTime() + GAME_LIMIT_MS
 	)
@@ -547,6 +575,8 @@ export async function leaveGameTransition(
 		)) as Rows<{ id: string; status: string }>;
 		if (!games.rows[0])
 			throw new RoundError(404, "GAME_NOT_FOUND", "Game not found");
+		if (session.role !== "CAPTAIN")
+			throw new RoundError(403, "CAPTAIN_REQUIRED", "Captain access required");
 		captain(session, gameId);
 		if (games.rows[0].status === "COMPLETE")
 			throw new RoundError(409, "GAME_COMPLETE", "Game is complete");

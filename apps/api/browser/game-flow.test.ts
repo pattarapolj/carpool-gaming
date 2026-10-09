@@ -212,6 +212,111 @@ async function choose(page: Page, value: string | number) {
 	await page.getByRole("button", { name: "Confirm team answer" }).click();
 }
 
+it("two phones play as host and captain and restore immediate progression without duplicate scoring", async () => {
+	vi.setSystemTime(origin);
+	const host = await client(320);
+	const captain = await client();
+	const people = [host, captain];
+	try {
+		await host.page.goto(harness.url);
+		await host.page.getByLabel("Game name").fill("Two phone convoy");
+		await host.page.getByRole("button", { name: "Create game" }).click();
+		assert.equal(
+			await host.page
+				.getByLabel("Car name")
+				.evaluate((input: HTMLInputElement) => input.validity.valueMissing),
+			true,
+		);
+		await host.page.getByLabel("Car name").fill("Host car");
+		await host.page.getByRole("button", { name: "Create game" }).click();
+		await visible(host.page, "1 car");
+		assert.equal(
+			await host.page
+				.getByRole("button", { name: "Start game", exact: true })
+				.isDisabled(),
+			true,
+		);
+		await captain.page.goto(
+			await host.page.getByLabel("Invite link").inputValue(),
+		);
+		await captain.page.getByLabel("Car name").fill("Captain car");
+		await captain.page.getByRole("button", { name: "Join game" }).click();
+		await visible(host.page, "2 cars");
+		await host.page
+			.getByRole("button", { name: "Start game", exact: true })
+			.click();
+		await Promise.all(
+			people.map((person) =>
+				visible(person.page, "Which ocean is the largest on Earth?"),
+			),
+		);
+		const first = await snapshot(host.page);
+		assert(first.callerTeam);
+		assert.equal(first.callerTeam.name, "Host car");
+		assert(first.round?.status === "OPEN");
+		await mobile(host.page, "two-phone-host-question");
+		// Both independent browsers submit together; the game lock must score once
+		// and publish one successor without a coordinator tick or clock advance.
+		await Promise.all(
+			people.map((person) => choose(person.page, "Pacific Ocean")),
+		);
+		await Promise.all(
+			people.map((person) => visible(person.page, "The Sun orbits the Earth.")),
+		);
+		const second = await snapshot(host.page);
+		assert(second.round?.status === "OPEN");
+		assert.equal(second.round.sequence, 2);
+		assert.equal(second.round.startsAt, first.round.startsAt);
+		assert.equal(second.previousRound?.id, first.round.id);
+		assert.equal(second.previousRound?.status, "REVEALED");
+		assert.equal(second.ownAnswer, null);
+		assert.deepEqual(
+			second.leaderboard.map((team) => team.score),
+			[1, 1],
+		);
+		await visible(host.page, "Answer: Pacific Ocean");
+		await mobile(host.page, "two-phone-previous-results");
+		await Promise.all(
+			people.map((person) => restore(person, "The Sun orbits the Earth.")),
+		);
+		for (const person of people) {
+			await visible(person.page, "Answer: Pacific Ocean");
+			const restored = await snapshot(person.page);
+			assert.deepEqual(restored.previousRound, second.previousRound);
+			assert.deepEqual(restored.leaderboard, second.leaderboard);
+			assert.equal(restored.round?.id, second.round.id);
+		}
+		await harness.tick();
+		await harness.tick();
+		assert.deepEqual(
+			(await snapshot(host.page)).leaderboard,
+			second.leaderboard,
+		);
+		const persisted = (
+			await harness.control.query(
+				"SELECT status,count(*) OVER ()::int AS count FROM rounds WHERE game_id=$1 ORDER BY sequence",
+				[first.game.id],
+			)
+		).rows;
+		assert.deepEqual(persisted, [
+			{ status: "REVEALED", count: 2 },
+			{ status: "OPEN", count: 2 },
+		]);
+		for (const person of people) {
+			assert.equal(
+				person.events.filter((event) => event.name === "round.revealed").length,
+				1,
+			);
+			assert.equal(
+				person.events.filter((event) => event.name === "round.started").length,
+				2,
+			);
+		}
+	} finally {
+		await Promise.all(people.map((person) => person.context.close()));
+	}
+}, 60000);
+
 it("three isolated captains restore every phase, lock all answer types and receive one authoritative reveal", async () => {
 	const host = await client();
 	const cars = await Promise.all([client(320), client(), client()]);
@@ -227,6 +332,7 @@ it("three isolated captains restore every phase, lock all answer types and recei
 			true,
 		);
 		await host.page.getByLabel("Game name").fill("Acceptance convoy");
+		await host.page.getByLabel("Car name").fill("Host car");
 		await host.page.getByRole("button", { name: "Create game" }).click();
 		await visible(host.page, "Share this join code");
 		const invite = await host.page.getByLabel("Invite link").inputValue();
@@ -252,7 +358,7 @@ it("three isolated captains restore every phase, lock all answer types and recei
 				0,
 			);
 		}
-		await visible(host.page, "3 cars");
+		await visible(host.page, "4 cars");
 		await mobile(host.page, "lobby-host");
 		await mobile(cars[2].page, "lobby-captain");
 		await Promise.all(
@@ -278,7 +384,7 @@ it("three isolated captains restore every phase, lock all answer types and recei
 		}
 		const roundId = open[0].round?.id;
 		assert(roundId);
-		assert.equal(await host.page.getByRole("radio").count(), 0);
+		assert.equal(await host.page.getByRole("radio").count(), 4);
 		await mobile(cars[0].page, "open-mc");
 		await Promise.all(
 			people.map((person) =>
@@ -398,6 +504,8 @@ it("three isolated captains restore every phase, lock all answer types and recei
 				host.events.find((event) => event.name === "round.started")?.payload,
 			);
 		}
+		await choose(host.page, "Pacific Ocean");
+		await visible(host.page, "Answer locked");
 		await choose(cars[2].page, "Pacific Ocean");
 		await Promise.all(
 			people.map((person) => visible(person.page, "Leaderboard")),
@@ -408,7 +516,10 @@ it("three isolated captains restore every phase, lock all answer types and recei
 			people.map((person) => snapshot(person.page)),
 		);
 		for (const [index, view] of revealed.entries()) {
-			assert.equal(view.round?.status, "REVEALED");
+			assert.equal(view.round?.status, "OPEN");
+			assert.equal(view.round?.sequence, 2);
+			assert.equal(view.previousRound?.id, roundId);
+			assert.equal(view.previousRound?.status, "REVEALED");
 			assert.deepEqual(view.leaderboard, revealed[0].leaderboard);
 			assert.equal(
 				people[index].events.filter((event) => event.name === "round.revealed")
@@ -435,14 +546,14 @@ it("three isolated captains restore every phase, lock all answer types and recei
 		);
 		await mobile(cars[0].page, "results");
 		await Promise.all(people.map((person) => restore(person, "Leaderboard")));
-		vi.setSystemTime(new Date(origin.getTime() + 300000));
-		await harness.tick();
 		await Promise.all(
 			people.map((person) => visible(person.page, "The Sun orbits the Earth.")),
 		);
 		const second = (await snapshot(host.page)).round;
 		assert(second?.status === "OPEN");
 		await mobile(cars[0].page, "open-boolean");
+		await choose(host.page, "False");
+		await visible(host.page, "Answer locked");
 		await choose(cars[0].page, "False");
 		await visible(cars[0].page, "Answer locked");
 		assert.equal((await snapshot(cars[0].page)).ownAnswer?.value, false);
@@ -487,7 +598,7 @@ it("three isolated captains restore every phase, lock all answer types and recei
 					[second.id],
 				)
 			).rows[0].expected_team_count,
-			3,
+			4,
 		);
 		await harness.tick();
 		assert.equal((await snapshot(host.page)).round?.status, "OPEN");
@@ -529,9 +640,11 @@ it("three isolated captains restore every phase, lock all answer types and recei
 					[third.id],
 				)
 			).rows[0].expected_team_count,
-			2,
+			3,
 		);
 		await mobile(cars[0].page, "estimate");
+		await choose(host.page, 90.5);
+		await visible(host.page, "Answer locked");
 		await cars[0].page.getByLabel("Team estimate").fill("1e309");
 		assert.equal(
 			await cars[0].page
@@ -543,11 +656,11 @@ it("three isolated captains restore every phase, lock all answer types and recei
 		await visible(cars[0].page, "Answer locked");
 		await choose(cars[1].page, 109.5);
 		await visible(host.page, "Answer: 100");
-		const estimate = (await snapshot(host.page)).round;
+		const estimate = (await snapshot(host.page)).previousRound;
 		assert(estimate?.status === "REVEALED");
 		assert.deepEqual(
 			estimate.results?.map((result) => result.pointsAwarded),
-			[1, 1],
+			[1, 1, 1],
 		);
 		await host.page
 			.getByRole("button", { name: "End game", exact: true })
@@ -597,17 +710,19 @@ it("the last fitting slot neutral-waits at the hard limit and the real coordinat
 	try {
 		await host.page.goto(harness.url);
 		await host.page.getByLabel("Game name").fill("Final slot convoy");
+		await host.page.getByLabel("Car name").fill("Host car");
 		await host.page.getByRole("button", { name: "Create game" }).click();
 		await visible(host.page, "Share this join code");
 		await car.page.goto(await host.page.getByLabel("Invite link").inputValue());
 		await car.page.getByLabel("Car name").fill("Last car");
 		await car.page.getByRole("button", { name: "Join game" }).click();
-		await host.page.getByLabel("Play solo practice").check();
 		await host.page
-			.getByRole("button", { name: "Start practice game" })
+			.getByRole("button", { name: "Start game", exact: true })
 			.click();
 		await visible(car.page, "Which ocean is the largest on Earth?");
 		await choose(car.page, "Pacific Ocean");
+		vi.setSystemTime(new Date(origin.getTime() + 60000));
+		await harness.tick();
 		await visible(host.page, "Leaderboard");
 		vi.setSystemTime(new Date(origin.getTime() + 7140000));
 		await harness.tick();
@@ -615,7 +730,10 @@ it("the last fitting slot neutral-waits at the hard limit and the real coordinat
 		const last = (await snapshot(host.page)).round;
 		assert(last?.status === "OPEN");
 		assert.equal(Date.parse(last.endsAt), origin.getTime() + 7200000);
+		// One millisecond into the last window, another full window no longer fits.
+		vi.setSystemTime(new Date(origin.getTime() + 7140001));
 		await choose(car.page, "False");
+		await choose(host.page, "False");
 		await visible(host.page, "Leaderboard");
 		const view = await snapshot(host.page);
 		assert.equal(view.game.status, "WAITING");

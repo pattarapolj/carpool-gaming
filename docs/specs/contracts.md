@@ -1,5 +1,7 @@
 # API and behavior contracts
 
+**Behavior amendment:** [Two-phone gameplay (2026-10-09)](../delivery/two-phone-gameplay.md) adds optional create `teamName`, participating-host answers, immediate progression and snapshot `previousRound`; it supersedes conflicting rules below.
+
 **Purpose:** Own requests, responses, error codes, observable state guarantees and live-event behavior for the MVP. Sections 1–7 explain create game in detail; sections 8–9 cover the remaining operations and events. No application or test implementation is included.
 
 **Status:** Specified MVP behavior with settled lifecycle and live synchronization decisions. Remaining open details are explicitly stated. Implementation and acceptance evidence is recorded in the [release guide](../delivery/quality-and-release.md) and [browser checklist](../testing/manual-three-car-checklist.md).

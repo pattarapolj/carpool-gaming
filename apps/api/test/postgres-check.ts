@@ -718,6 +718,7 @@ async function main() {
 				transports: ["websocket"],
 			});
 			const events: string[] = [];
+			const revealedRoundIds: string[] = [];
 			const post = (url: string, token: string, payload = {}) =>
 				app.inject({
 					method: "POST",
@@ -755,7 +756,10 @@ async function main() {
 					).statusCode,
 					200,
 				);
-				socket.on("round.revealed", () => events.push("round.revealed"));
+				socket.on("round.revealed", (payload) => {
+					events.push("round.revealed");
+					revealedRoundIds.push(RoundRevealedSchema.parse(payload).roundId);
+				});
 				socket.on("game.completed", () => events.push("game.completed"));
 				const revealed = new Promise<unknown>((resolve, reject) => {
 					const timer = setTimeout(
@@ -824,9 +828,32 @@ async function main() {
 				);
 				assert(recovered.ok);
 				assert.equal(recovered.snapshot.game.status, "COMPLETE");
-				assert.deepEqual(events, ["round.revealed", "game.completed"]);
+				const answeredFirst = answerResult.value.statusCode === 200;
+				assert.deepEqual(
+					events,
+					answeredFirst
+						? ["round.revealed", "round.revealed", "game.completed"]
+						: ["round.revealed", "game.completed"],
+				);
+				const rounds = await control.query<{
+					id: string;
+					sequence: number;
+					status: string;
+				}>(
+					"SELECT id,sequence,status FROM rounds WHERE game_id=$1 ORDER BY sequence",
+					[created.game.id],
+				);
+				assert.deepEqual(
+					rounds.rows.map((row) => row.sequence),
+					answeredFirst ? [1, 2] : [1],
+				);
+				assert(rounds.rows.every((row) => row.status === "REVEALED"));
+				assert.deepEqual(
+					revealedRoundIds,
+					rounds.rows.map((row) => row.id),
+				);
 				console.log(
-					"PASS real authenticated WebSocket delivers committed reveal/completion once during independent HTTP end/answer contention",
+					"PASS real authenticated WebSocket reveals each committed round once during immediate successor/end contention",
 				);
 			} finally {
 				socket.disconnect();

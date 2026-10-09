@@ -106,8 +106,7 @@ export function createLiveServer(app: FastifyInstance, db: GameDb) {
 					if (closing || !socket.connected) return;
 					if (subscribe) {
 						await socket.join(gameRoom(session.gameId));
-						if (session.role === "CAPTAIN" && session.teamId)
-							await socket.join(teamRoom(session.teamId));
+						if (session.teamId) await socket.join(teamRoom(session.teamId));
 					} else if (!socket.rooms.has(gameRoom(session.gameId))) {
 						return ack({ ok: false, error: safeError("FORBIDDEN") });
 					}
@@ -170,7 +169,7 @@ export function createLiveServer(app: FastifyInstance, db: GameDb) {
 			}
 			publishTransition({
 				gameId: session.gameId,
-				opened: null,
+				opened: locked.opened,
 				reveal: locked.reveal,
 				completion: locked.reveal?.completion ?? null,
 			});

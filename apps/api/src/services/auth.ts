@@ -33,13 +33,15 @@ export async function resolveSession(
 	db: GameDb,
 ): Promise<Session | null> {
 	const result = (await db.query(
-		`SELECT id AS "gameId", 'HOST' AS role, NULL::uuid AS "teamId"
-		 FROM games
-		 WHERE host_token_hash = $1
+		`SELECT g.id AS "gameId", 'HOST' AS role, t.id AS "teamId"
+		 FROM games g LEFT JOIN car_teams t
+		 ON t.game_id = g.id AND t.captain_token_hash = g.host_token_hash
+		 WHERE g.host_token_hash = $1
 		 UNION ALL
 		 SELECT game_id AS "gameId", 'CAPTAIN' AS role, id AS "teamId"
 		 FROM car_teams
 		 WHERE captain_token_hash = $1
+		 ORDER BY role DESC
 		 LIMIT 1`,
 		[hashToken(token)],
 	)) as QueryResult<Session>;

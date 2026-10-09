@@ -34,6 +34,7 @@ export default function App() {
 		try {
 			const created = await createGame({
 				name: gameName,
+				teamName,
 				roundIntervalSeconds,
 			});
 			activateSession({
@@ -168,7 +169,18 @@ export default function App() {
 								required
 								value={gameName}
 							/>
-							<label htmlFor="round-interval">New round every</label>
+							<label htmlFor="host-car-name">Car name</label>
+							<input
+								autoComplete="off"
+								id="host-car-name"
+								maxLength={60}
+								name="teamName"
+								onChange={(event) => setTeamName(event.currentTarget.value)}
+								placeholder="Blue Sedan"
+								required
+								value={teamName}
+							/>
+							<label htmlFor="round-interval">Round interval</label>
 							<select
 								id="round-interval"
 								name="roundIntervalSeconds"
@@ -183,6 +195,10 @@ export default function App() {
 								<option value={600}>10 minutes</option>
 								<option value={900}>15 minutes</option>
 							</select>
+							<p className="form-footnote">
+								The next round starts immediately when every car confirms its
+								answer. Otherwise, this interval applies.
+							</p>
 							{error && (
 								<p className="form-error" role="alert">
 									{error}
