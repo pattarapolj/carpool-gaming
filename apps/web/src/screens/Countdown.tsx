@@ -25,7 +25,9 @@ export function Countdown({
 			)
 		: 0;
 	return (
-		<p className="countdown">
+		<p
+			className={`countdown ${remaining > 0 && remaining <= 10 ? "countdown-urgent" : ""}`}
+		>
 			{remaining > 0
 				? `${label} ${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, "0")}`
 				: "Waiting for the server's next update…"}

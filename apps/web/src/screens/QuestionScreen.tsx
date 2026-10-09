@@ -77,7 +77,7 @@ export function QuestionScreen({
 	}
 	return (
 		<section className="game-card" aria-labelledby="question-heading">
-			<p className="eyebrow">
+			<p className="round-meta">
 				ROUND {round.sequence} · {snapshot.callerTeam?.name ?? "HOST VIEW"}
 			</p>
 			<h2 id="question-heading">{round.question.prompt}</h2>
@@ -88,7 +88,16 @@ export function QuestionScreen({
 				label="Answer window"
 			/>
 			{locked !== null ? (
-				<div className="wait-panel" role="status">
+				<div className="wait-panel answer-locked" role="status">
+					<svg
+						className="lock-check"
+						viewBox="0 0 32 32"
+						fill="none"
+						aria-hidden="true"
+					>
+						<circle cx="16" cy="16" r="14" />
+						<path d="m9 16 5 5 9-10" />
+					</svg>
 					<div>
 						<h3>Answer locked</h3>
 						<p>
@@ -98,7 +107,7 @@ export function QuestionScreen({
 					</div>
 				</div>
 			) : canAnswer ? (
-				<form onSubmit={confirm}>
+				<form onSubmit={confirm} aria-busy={busy}>
 					<fieldset className="answer-options" disabled={busy}>
 						<legend>Choose your team's answer, then confirm</legend>
 						{round.question.type === "ESTIMATE" ? (
@@ -135,6 +144,7 @@ export function QuestionScreen({
 					) : null}
 					<button
 						className="primary-button"
+						aria-busy={busy}
 						disabled={busy || value === null}
 						type="submit"
 					>

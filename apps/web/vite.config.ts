@@ -19,8 +19,8 @@ export default defineConfig({
 				description: "A relaxed trivia game for cars travelling together.",
 				start_url: "/",
 				display: "standalone",
-				background_color: "#f6f1e7",
-				theme_color: "#f6f1e7",
+				background_color: "#171b24",
+				theme_color: "#171b24",
 				icons: [
 					{
 						src: "/icon-192.png",
@@ -41,6 +41,7 @@ export default defineConfig({
 				],
 			},
 			workbox: {
+				globPatterns: ["**/*.{js,css,html,ico,png,svg,ttf,webp}"],
 				navigateFallbackDenylist: [/^\/v1\//],
 			},
 		}),

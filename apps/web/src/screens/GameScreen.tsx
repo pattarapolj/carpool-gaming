@@ -154,7 +154,7 @@ export function GameScreen({
 			) : (
 				<section className="lobby-layout gameplay-layout">
 					<div className="lobby-heading">
-						<p className="eyebrow">
+						<p className="round-meta">
 							{host
 								? view.callerTeam
 									? "HOST & CAR CAPTAIN"
@@ -246,6 +246,7 @@ export function GameScreen({
 							<button
 								ref={confirmationButton}
 								className="primary-button"
+								aria-busy={busy}
 								type="button"
 								disabled={busy}
 								onClick={() => void act(confirmation)}
