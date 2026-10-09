@@ -120,7 +120,7 @@ async function fixture(type = "MULTIPLE_CHOICE") {
 		[team, id, hashToken(team)],
 	);
 	await db.query(
-		"INSERT INTO rounds (id,game_id,question_id,sequence,starts_at,ends_at,expected_team_count) SELECT $1,$2,id,1,now(),now()+interval '1 hour',2 FROM questions WHERE type=$3",
+		"INSERT INTO rounds (id,game_id,question_id,sequence,starts_at,ends_at,expected_team_count) SELECT $1,$2,id,1,now(),now()+interval '1 hour',2 FROM questions WHERE type=$3 ORDER BY id LIMIT 1",
 		[round, id, type],
 	);
 	return { id, team, round, headers: { authorization: `Bearer ${team}` } };

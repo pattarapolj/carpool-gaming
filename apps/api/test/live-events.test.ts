@@ -383,29 +383,31 @@ it("deadline delivery reveals once and sends last-question completion from the s
 		[own.game.id],
 	);
 	const roundId = rounds.rows[0].id;
-	// Remove unused questions for this game without changing the shared bank.
 	await db.query(
-		"INSERT INTO rounds(id,game_id,question_id,sequence,status,starts_at,ends_at,expected_team_count,expected_team_ids,revealed_at) SELECT gen_random_uuid(),$1,id,100+row_number() OVER(ORDER BY id),'REVEALED',now(),now()+interval '1 second',1,NULL,now() FROM questions WHERE id NOT IN (SELECT question_id FROM rounds WHERE game_id=$1)",
-		[own.game.id],
+		"UPDATE questions SET is_active=(id='10000000-0000-4000-8000-000000000001')",
 	);
-	const events = record(socket, liveNames);
-	const revealed = event(socket, "round.revealed");
-	const completed = event(socket, "game.completed");
-	await db.query(
-		"UPDATE rounds SET starts_at=now()-interval '2 seconds',ends_at=now()-interval '1 second' WHERE id=$1",
-		[roundId],
-	);
-	const reveal = RoundRevealedSchema.parse(await revealed);
-	const completion = GameCompletedSchema.parse(await completed);
-	expect(reveal.roundId).toBe(roundId);
-	expect(reveal.results?.map((result) => result.value)).toEqual([null, null]);
-	expect(reveal.nextRoundAt).toBeNull();
-	expect(completion.game.completionReason).toBe("QUESTION_BANK_EXHAUSTED");
-	await settle();
-	expect(events.map((e) => e.name)).toEqual([
-		"round.revealed",
-		"game.completed",
-	]);
+	try {
+		const events = record(socket, liveNames);
+		const revealed = event(socket, "round.revealed");
+		const completed = event(socket, "game.completed");
+		await db.query(
+			"UPDATE rounds SET starts_at=now()-interval '2 seconds',ends_at=now()-interval '1 second' WHERE id=$1",
+			[roundId],
+		);
+		const reveal = RoundRevealedSchema.parse(await revealed);
+		const completion = GameCompletedSchema.parse(await completed);
+		expect(reveal.roundId).toBe(roundId);
+		expect(reveal.results?.map((result) => result.value)).toEqual([null, null]);
+		expect(reveal.nextRoundAt).toBeNull();
+		expect(completion.game.completionReason).toBe("QUESTION_BANK_EXHAUSTED");
+		await settle();
+		expect(events.map((e) => e.name)).toEqual([
+			"round.revealed",
+			"game.completed",
+		]);
+	} finally {
+		await db.query("UPDATE questions SET is_active=true");
+	}
 });
 
 it("a scoring rollback emits neither the final lock nor reveal/completion", async () => {

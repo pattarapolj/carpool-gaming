@@ -25,19 +25,47 @@ afterAll(async () => {
 	if (db) await db.close();
 });
 
-it("loads three attributed sample questions with typed answer keys", async () => {
-	// Query first so RED demonstrates the missing schema, rather than a missing fixture file.
-	await db.query("SELECT id FROM questions");
-	await db.exec(
-		await readFile(
-			new URL("../../seeds/questions.sql", import.meta.url),
-			"utf8",
-		),
+it("loads 24 attributed questions with typed keys and preserves rows on reload", async () => {
+	const seed = await readFile(
+		new URL("../../seeds/questions.sql", import.meta.url),
+		"utf8",
 	);
-	const { rows } = await db.query(
+	await db.exec(seed);
+	const { rows } = await db.query<{
+		type: string;
+		choices: string[] | null;
+		correct_answer: string | boolean | number;
+		source_title: string;
+		source_url: string;
+		is_active: boolean;
+	}>(
 		"SELECT type, choices, correct_answer, source_title, source_url, is_active FROM questions ORDER BY id",
 	);
-	expect(rows).toEqual([
+	expect(rows).toHaveLength(24);
+	for (const type of ["MULTIPLE_CHOICE", "TRUE_FALSE", "ESTIMATE"]) {
+		expect(rows.filter((row) => row.type === type)).toHaveLength(8);
+	}
+	expect(rows.map((row) => row.type)).toEqual(
+		Array(8).fill(["MULTIPLE_CHOICE", "TRUE_FALSE", "ESTIMATE"]).flat(),
+	);
+	for (const row of rows) {
+		expect(row.source_title.trim()).not.toBe("");
+		expect(row.source_url).toMatch(/^https:\/\/science\.nasa\.gov\//);
+		expect(row.is_active).toBe(true);
+		if (row.type === "MULTIPLE_CHOICE") {
+			expect(typeof row.correct_answer).toBe("string");
+			expect(row.choices).toContain(row.correct_answer);
+			expect(new Set(row.choices).size).toBe(row.choices?.length);
+		} else {
+			expect(row.choices).toBeNull();
+			expect(typeof row.correct_answer).toBe(
+				row.type === "TRUE_FALSE" ? "boolean" : "number",
+			);
+			if (row.type === "ESTIMATE")
+				expect(Number.isFinite(row.correct_answer)).toBe(true);
+		}
+	}
+	expect(rows.slice(0, 3)).toEqual([
 		{
 			type: "MULTIPLE_CHOICE",
 			choices: ["Earth", "Jupiter", "Neptune", "Saturn"],
@@ -63,6 +91,30 @@ it("loads three attributed sample questions with typed answer keys", async () =>
 			is_active: true,
 		},
 	]);
+	const content = (
+		await db.query<{ id: string; prompt: string; explanation: string }>(
+			"SELECT id,prompt,explanation FROM questions ORDER BY id",
+		)
+	).rows;
+	expect(content.slice(0, 3).map((row) => row.id)).toEqual([
+		"10000000-0000-4000-8000-000000000001",
+		"10000000-0000-4000-8000-000000000002",
+		"10000000-0000-4000-8000-000000000003",
+	]);
+	expect(new Set(content.map((row) => row.prompt)).size).toBe(24);
+	for (const row of content) {
+		expect(row.prompt.trim()).not.toBe("");
+		expect(row.explanation.trim()).not.toBe("");
+	}
+	await db.query(
+		"UPDATE questions SET explanation='Previously released wording' WHERE id=$1",
+		[question],
+	);
+	const before = (await db.query("SELECT * FROM questions ORDER BY id")).rows;
+	await db.exec(seed);
+	expect((await db.query("SELECT * FROM questions ORDER BY id")).rows).toEqual(
+		before,
+	);
 });
 
 it("stores rounds and rejects duplicate game sequences", async () => {

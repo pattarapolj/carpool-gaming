@@ -527,7 +527,9 @@ it("empty active bank starts durably COMPLETE with nullable next time", async ()
 it("final bank reveal completes in the scoring transaction without phantom next round", async () => {
 	const f = await fixture();
 	assert(f.snapshot.round);
-	await db.query("UPDATE questions SET is_active=false");
+	await db.query(
+		"UPDATE questions SET is_active=(id='10000000-0000-4000-8000-000000000001')",
+	);
 	try {
 		await lockAnswer(
 			f.snapshot.round.id,
