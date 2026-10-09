@@ -200,6 +200,8 @@ You can write tests for the settled rules while these decisions are discussed. S
 
 **200 response:** `{ "game": { "status": "WAITING", "startedAt": "…", "nextRoundAt": "…" } }`.
 
+Successful start opens the first available question in the same transaction, at `startedAt`, with a full answer window. `nextRoundAt` in the response is the committed next future interval boundary, not the intermediate immediate due timestamp. If the bank is empty, opening safely does nothing and the immediate due timestamp remains until completion policy is delivered. A failed opening rolls back start as well.
+
 **Acceptance:** requires at least two active teams unless the request uses explicit `practice: true`; a non-host receives `403`; a started game receives `409`.
 
 | Status | Code | Exact condition |
@@ -235,7 +237,24 @@ You can write tests for the settled rules while these decisions are discussed. S
 }
 ```
 
-The lobby slice returns the game fields and active teams above so refresh restores the lobby and its join code. Round fields, the caller's answer and the leaderboard will be added with round delivery; an open round must never expose its answer key or another team's answer. This is not yet the complete in-game snapshot schema.
+The full snapshot retains the game fields and ACTIVE-only `teams` above for lobby consumers and requires the following additional fields (the example above shows only the retained portion):
+
+| Field | Exact shape and null behavior |
+|---|---|
+| `round` | `null` before any delivered round; otherwise the latest round by sequence, including after game completion. |
+| `ownAnswer` | `null` for hosts or a captain without an answer to the latest round; otherwise `{ answerId: UUID, value: string \| boolean \| finite number, submittedAt: ISO timestamp }`. Remains available after reveal. Team identity comes only from the authenticated token. |
+| `callerTeam` | `null` for hosts; otherwise `{ id: UUID, name: string, score: integer, status: ACTIVE \| LEFT }` for the token's team, including a team that left. |
+| `leaderboard` | All teams including LEFT, ordered by descending score, then name, then UUID. Each entry is `{ id: UUID, name: string, score: integer, status: ACTIVE \| LEFT, rank: positive integer }`. Competition ranks depend only on score: `1,1,3` for two tied leaders. |
+| `serverTime` | ISO timestamp sampled by the server within the snapshot transaction. Used only to display countdowns; never authorizes scoring, answers or reveal. |
+
+`round` is discriminated by `status`. Both variants contain exactly `id` (UUID), `sequence` (positive integer), `status`, `startsAt` and `endsAt` (ISO timestamps), and `question: { id: UUID, type: MULTIPLE_CHOICE \| TRUE_FALSE \| ESTIMATE, prompt: string, choices: string[] \| null }`. Choices are null for true/false and estimate questions.
+
+- `OPEN` contains only those fields: no key, explanation, results, grades or other teams' submissions.
+- `REVEALED` additionally contains `revealedAt` (ISO timestamp), `correctAnswer` (string, boolean or finite number), `explanation` (string), and `results`. Results are the original captured participants, ordered by name then UUID, with entries `{ teamId: UUID, name: string, value: string \| boolean \| finite number \| null, isCorrect: boolean, pointsAwarded: 0 \| 1 }`. Unanswered and LEFT participants remain present; unanswered entries have null value, false correctness and zero points. A legacy round whose participant IDs were never recorded has `results: null`; do not reconstruct a historical roster from today's teams.
+
+No snapshot returns raw credentials, token hashes or internal source attribution. Refresh builds REVEALED results from persisted answer grades and the captured roster without awarding points again. Question keys/explanations are not publicly editable in this MVP. The snapshot takes a transaction-scoped shared game lock before all round/team/answer/leaderboard reads, validates ownership inside that view, and therefore observes one committed transition state. Every game mutation takes the exclusive game lock first. HTTP and the future socket handshake use this same authorized service; socket delivery/synchronization remains pending.
+
+The listening API runs a tick every second, with no concurrent runtime tick. It reveals eligible OPEN rounds and opens due rounds using guarded transactions and server clocks sampled after lock acquisition; overlapping callers cannot reveal or score twice. A delayed process opens one fresh full window and skips missed anchored slots. Tick errors are logged and retried on the next interval; shutdown clears the timer and drains work before closing storage. No unused questions or no active teams is currently a safe no-op; automatic completion and realtime publication remain required later work.
 
 **Acceptance:** a token from another game receives `403`; a reconnect returns the server’s actual phase; open-round JSON contains no `correctAnswer` text.
 

@@ -2,9 +2,15 @@ import { randomBytes, randomUUID } from "node:crypto";
 import type { z } from "zod";
 import type {
 	CreateGameSchema,
+	GameSnapshot,
 	JoinGameSchema,
 } from "../../../../packages/contracts/src/index";
 import { type GameDb, hashToken, type QueryDb, type Session } from "./auth";
+import {
+	getLeaderboard,
+	getRoundResults,
+	openDueRoundInTransaction,
+} from "./round-service";
 
 export type { GameDb } from "./auth";
 
@@ -39,7 +45,7 @@ type SnapshotGameRow = {
 	name: string;
 	joinCode: string;
 	status: "LOBBY" | "WAITING" | "COMPLETE";
-	roundIntervalSeconds: number;
+	roundIntervalSeconds: 300 | 600 | 900;
 	startedAt: Date | string | null;
 	nextRoundAt: Date | string | null;
 };
@@ -47,7 +53,7 @@ type SnapshotGameRow = {
 type SnapshotTeamRow = {
 	id: string;
 	name: string;
-	status: "ACTIVE" | "LEFT";
+	status: "ACTIVE";
 	score: number;
 };
 
@@ -258,7 +264,8 @@ async function performStartGame(
 		 RETURNING id, status, started_at AS "startedAt", next_round_at AS "nextRoundAt"`,
 		[gameId, now],
 	)) as QueryResult<StartGameRow>;
-
+	const opened = await openDueRoundInTransaction(gameId, db, () => now);
+	if (opened) updatedGame.rows[0].nextRoundAt = opened.nextRoundAt;
 	return updatedGame.rows[0];
 }
 
@@ -271,39 +278,128 @@ export async function getGameSnapshot(
 		throw new GameSnapshotError(404, "GAME_NOT_FOUND", "Game not found");
 	}
 
-	const gameResult = (await db.query(
-		`SELECT id, name, join_code AS "joinCode", status,
+	return db.transaction(async (tx): Promise<GameSnapshot> => {
+		const gameResult = (await tx.query(
+			`SELECT id, name, join_code AS "joinCode", status,
 		        round_interval_seconds AS "roundIntervalSeconds",
 	        started_at AS "startedAt", next_round_at AS "nextRoundAt"
 		 FROM games
-		 WHERE id = $1`,
-		[gameId],
-	)) as QueryResult<SnapshotGameRow>;
-	const game = gameResult.rows[0];
+		 WHERE id = $1 FOR SHARE`,
+			[gameId],
+		)) as QueryResult<SnapshotGameRow>;
+		const game = gameResult.rows[0];
 
-	if (!game) {
-		throw new GameSnapshotError(404, "GAME_NOT_FOUND", "Game not found");
-	}
-	if (session.gameId !== game.id) {
-		throw new GameSnapshotError(403, "FORBIDDEN", "Game access required");
-	}
+		if (!game) {
+			throw new GameSnapshotError(404, "GAME_NOT_FOUND", "Game not found");
+		}
+		if (session.gameId !== game.id) {
+			throw new GameSnapshotError(403, "FORBIDDEN", "Game access required");
+		}
 
-	const teamsResult = (await db.query(
-		`SELECT id, name, status, score
+		const teamsResult = (await tx.query(
+			`SELECT id, name, status, score
 		 FROM car_teams
 		 WHERE game_id = $1 AND status = 'ACTIVE'
 		 ORDER BY joined_at, id`,
-		[gameId],
-	)) as QueryResult<SnapshotTeamRow>;
+			[gameId],
+		)) as QueryResult<SnapshotTeamRow>;
+		const leaderboard = await getLeaderboard(gameId, tx);
+		const callerTeam =
+			session.role === "CAPTAIN"
+				? leaderboard.find((team) => team.id === session.teamId)
+				: null;
+		if (session.role === "CAPTAIN" && !callerTeam)
+			throw new GameSnapshotError(403, "FORBIDDEN", "Game access required");
+		const rounds = (await tx.query(
+			`SELECT r.id,r.sequence,r.status,r.starts_at,r.ends_at,r.revealed_at,r.expected_team_ids,
+		q.id AS question_id,q.type,q.prompt,q.choices,q.correct_answer,q.explanation
+		FROM rounds r JOIN questions q ON q.id=r.question_id WHERE r.game_id=$1 ORDER BY r.sequence DESC LIMIT 1`,
+			[gameId],
+		)) as QueryResult<{
+			id: string;
+			sequence: number;
+			status: "OPEN" | "REVEALED";
+			starts_at: Date;
+			ends_at: Date;
+			revealed_at: Date;
+			expected_team_ids: string[] | null;
+			question_id: string;
+			type: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "ESTIMATE";
+			prompt: string;
+			choices: string[] | null;
+			correct_answer: string | boolean | number;
+			explanation: string;
+		}>;
+		const latest = rounds.rows[0];
+		let round: GameSnapshot["round"] = null;
+		let ownAnswer: GameSnapshot["ownAnswer"] = null;
+		if (latest) {
+			const publicRound = {
+				id: latest.id,
+				sequence: latest.sequence,
+				startsAt: new Date(latest.starts_at).toISOString(),
+				endsAt: new Date(latest.ends_at).toISOString(),
+				question: {
+					id: latest.question_id,
+					type: latest.type,
+					prompt: latest.prompt,
+					choices: latest.choices,
+				},
+			};
+			round =
+				latest.status === "OPEN"
+					? { ...publicRound, status: "OPEN" }
+					: {
+							...publicRound,
+							status: "REVEALED",
+							revealedAt: new Date(latest.revealed_at).toISOString(),
+							correctAnswer: latest.correct_answer,
+							explanation: latest.explanation,
+							results: await getRoundResults(
+								latest.id,
+								gameId,
+								latest.expected_team_ids,
+								tx,
+							),
+						};
+			if (callerTeam) {
+				const answers = (await tx.query(
+					'SELECT id AS "answerId",value,submitted_at AS "submittedAt" FROM answers WHERE round_id=$1 AND car_team_id=$2',
+					[latest.id, callerTeam.id],
+				)) as QueryResult<{
+					answerId: string;
+					value: string | boolean | number;
+					submittedAt: Date;
+				}>;
+				if (answers.rows[0])
+					ownAnswer = {
+						...answers.rows[0],
+						submittedAt: new Date(answers.rows[0].submittedAt).toISOString(),
+					};
+			}
+		}
 
-	return {
-		game: {
-			...game,
-			startedAt: toISOString(game.startedAt),
-			nextRoundAt: toISOString(game.nextRoundAt),
-		},
-		teams: teamsResult.rows,
-	};
+		return {
+			game: {
+				...game,
+				startedAt: toISOString(game.startedAt),
+				nextRoundAt: toISOString(game.nextRoundAt),
+			},
+			teams: teamsResult.rows,
+			round,
+			ownAnswer,
+			callerTeam: callerTeam
+				? {
+						id: callerTeam.id,
+						name: callerTeam.name,
+						score: callerTeam.score,
+						status: callerTeam.status,
+					}
+				: null,
+			leaderboard,
+			serverTime: new Date().toISOString(),
+		};
+	});
 }
 
 function isUuid(value: string) {

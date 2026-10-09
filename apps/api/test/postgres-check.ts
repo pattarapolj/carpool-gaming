@@ -2,8 +2,11 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { Pool } from "pg";
+import { tick } from "../src/coordinator";
 import { buildServer, createPostgresDb } from "../src/server";
+import type { GameDb } from "../src/services/auth";
 import { hashToken, type Session } from "../src/services/auth";
+import { getGameSnapshot } from "../src/services/games-services";
 import {
 	lockAnswer,
 	openDueRound,
@@ -359,6 +362,104 @@ async function main() {
 			);
 			console.log(
 				"PASS scoring failure rolls back final answer, grades, scores and reveal; retry succeeds",
+			);
+		}
+		{
+			const { gameId, sessions } = await game();
+			const opened = await openDueRound(gameId, storage, at(0));
+			assert(opened);
+			await lockAnswer(
+				opened.round.id,
+				{ value: "Jupiter" },
+				sessions[0],
+				storage,
+				at(1),
+			);
+			let transitionReady = () => {};
+			let release = () => {};
+			const ready = new Promise<void>((resolve) => {
+				transitionReady = resolve;
+			});
+			const gate = new Promise<void>((resolve) => {
+				release = resolve;
+			});
+			const gated: GameDb = {
+				...storage,
+				transaction: (run) =>
+					storage.transaction(async (tx) => {
+						const result = await run(tx);
+						transitionReady();
+						await gate;
+						return result;
+					}),
+			};
+			const scoring = Promise.allSettled([
+				revealDueRound(opened.round.id, gated, at(60)),
+			]);
+			let reading: ReturnType<typeof getGameSnapshot> | undefined;
+			try {
+				await ready;
+				reading = getGameSnapshot(gameId, sessions[0], storage);
+				await waiting(1);
+				const before = await control.query(
+					"SELECT r.status,t.score FROM rounds r JOIN car_teams t ON t.game_id=r.game_id WHERE r.id=$1 ORDER BY t.name",
+					[opened.round.id],
+				);
+				assert.deepEqual(before.rows, [
+					{ status: "OPEN", score: 0 },
+					{ status: "OPEN", score: 0 },
+				]);
+				release();
+				const snapshot = await reading;
+				assert.equal(snapshot.round?.status, "REVEALED");
+				assert.deepEqual(
+					snapshot.leaderboard.map((team) => [team.score, team.rank]),
+					[
+						[1, 1],
+						[0, 2],
+					],
+				);
+				assert.equal(
+					snapshot.round?.status === "REVEALED" &&
+						snapshot.round.results?.find(
+							(result) => result.teamId === sessions[0].teamId,
+						)?.pointsAwarded,
+					1,
+				);
+				assert.equal((await scoring)[0].status, "fulfilled");
+				console.log(
+					"PASS atomic snapshot waits for scoring commit: REVEALED, grades, scores and ranks agree",
+				);
+			} finally {
+				release();
+				await scoring;
+				if (reading) await reading;
+			}
+		}
+		{
+			const { gameId, sessions } = await game();
+			const opened = await openDueRound(gameId, storage, at(0));
+			assert(opened);
+			await lockAnswer(
+				opened.round.id,
+				{ value: "Jupiter" },
+				sessions[0],
+				storage,
+				at(1),
+			);
+			const results = await overlap(gameId, [
+				() => tick(storage, at(60)),
+				() => tick(storage, at(60)),
+			]);
+			assert(results.every((result) => result.status === "fulfilled"));
+			const snapshot = await getGameSnapshot(gameId, sessions[1], storage);
+			assert.equal(snapshot.round?.status, "REVEALED");
+			assert.deepEqual(
+				snapshot.leaderboard.map((team) => team.score),
+				[1, 0],
+			);
+			console.log(
+				"PASS overlapping coordinator ticks on independent connections: reveal and points once",
 			);
 		}
 	} finally {

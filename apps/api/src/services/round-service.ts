@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type {
+	GameSnapshot,
 	LeftGame,
+	RoundResult,
 	SubmitAnswerInput,
 	SubmittedAnswer,
 } from "../../../../packages/contracts/src/index";
@@ -119,84 +121,89 @@ export async function openDueRound(
 	db: GameDb,
 	clock: Clock = () => new Date(),
 ) {
-	return db.transaction(async (tx) => {
-		const games = (await tx.query(
-			"SELECT status,started_at,next_round_at,round_interval_seconds,question_window_seconds FROM games WHERE id::text=$1 FOR UPDATE",
-			[gameId],
-		)) as Rows<{
-			status: string;
-			started_at: Date;
-			next_round_at: Date;
-			round_interval_seconds: number;
-			question_window_seconds: number;
-		}>;
-		const game = games.rows[0];
-		if (game?.status !== "WAITING" || !game.started_at || !game.next_round_at)
-			return null;
-		const previous = (await tx.query(
-			"SELECT sequence,status FROM rounds WHERE game_id=$1 ORDER BY sequence DESC LIMIT 1",
-			[gameId],
-		)) as Rows<{ sequence: number; status: string }>;
-		if (previous.rows[0]?.status === "OPEN") return null;
-		const teams = (await tx.query(
-			"SELECT id FROM car_teams WHERE game_id=$1 AND status='ACTIVE' ORDER BY id FOR UPDATE",
-			[gameId],
-		)) as Rows<{ id: string }>;
-		if (!teams.rows.length) return null;
-		const questions = (await tx.query(
-			"SELECT id,type,prompt,choices FROM questions q WHERE is_active AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.game_id=$1 AND r.question_id=q.id) ORDER BY id LIMIT 1",
-			[gameId],
-		)) as Rows<{
-			id: string;
-			type: Round["type"];
-			prompt: string;
-			choices: string[] | null;
-		}>;
-		const question = questions.rows[0];
-		if (!question) return null;
-		const now = clock();
-		if (now < new Date(game.next_round_at)) return null;
-		const interval = game.round_interval_seconds * 1000;
-		const anchor = new Date(game.started_at).getTime();
-		// Sequence counts delivered rounds; missed schedule slots are skipped.
-		const nextRoundAt = new Date(
-			anchor + (Math.floor((now.getTime() - anchor) / interval) + 1) * interval,
-		);
-		const endsAt = new Date(
-			now.getTime() + game.question_window_seconds * 1000,
-		);
-		const id = randomUUID();
-		const sequence = (previous.rows[0]?.sequence ?? 0) + 1;
-		await tx.query(
-			"INSERT INTO rounds (id,game_id,question_id,sequence,starts_at,ends_at,expected_team_count,expected_team_ids) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
-			[
-				id,
-				gameId,
-				question.id,
-				sequence,
-				now,
-				endsAt,
-				teams.rows.length,
-				teams.rows.map((team) => team.id),
-			],
-		);
-		await tx.query("UPDATE games SET next_round_at=$2 WHERE id=$1", [
+	return db.transaction((tx) => openDueRoundInTransaction(gameId, tx, clock));
+}
+
+// Start and scheduled delivery share the same game-first transition.
+export async function openDueRoundInTransaction(
+	gameId: string,
+	tx: QueryDb,
+	clock: Clock = () => new Date(),
+) {
+	const games = (await tx.query(
+		"SELECT status,started_at,next_round_at,round_interval_seconds,question_window_seconds FROM games WHERE id::text=$1 FOR UPDATE",
+		[gameId],
+	)) as Rows<{
+		status: string;
+		started_at: Date;
+		next_round_at: Date;
+		round_interval_seconds: number;
+		question_window_seconds: number;
+	}>;
+	const game = games.rows[0];
+	if (game?.status !== "WAITING" || !game.started_at || !game.next_round_at)
+		return null;
+	const previous = (await tx.query(
+		"SELECT sequence,status FROM rounds WHERE game_id=$1 ORDER BY sequence DESC LIMIT 1",
+		[gameId],
+	)) as Rows<{ sequence: number; status: string }>;
+	if (previous.rows[0]?.status === "OPEN") return null;
+	const teams = (await tx.query(
+		"SELECT id FROM car_teams WHERE game_id=$1 AND status='ACTIVE' ORDER BY id FOR UPDATE",
+		[gameId],
+	)) as Rows<{ id: string }>;
+	if (!teams.rows.length) return null;
+	const questions = (await tx.query(
+		"SELECT id,type,prompt,choices FROM questions q WHERE is_active AND NOT EXISTS (SELECT 1 FROM rounds r WHERE r.game_id=$1 AND r.question_id=q.id) ORDER BY id LIMIT 1",
+		[gameId],
+	)) as Rows<{
+		id: string;
+		type: Round["type"];
+		prompt: string;
+		choices: string[] | null;
+	}>;
+	const question = questions.rows[0];
+	if (!question) return null;
+	const now = clock();
+	if (now < new Date(game.next_round_at)) return null;
+	const interval = game.round_interval_seconds * 1000;
+	const anchor = new Date(game.started_at).getTime();
+	// Sequence counts delivered rounds; missed schedule slots are skipped.
+	const nextRoundAt = new Date(
+		anchor + (Math.floor((now.getTime() - anchor) / interval) + 1) * interval,
+	);
+	const endsAt = new Date(now.getTime() + game.question_window_seconds * 1000);
+	const id = randomUUID();
+	const sequence = (previous.rows[0]?.sequence ?? 0) + 1;
+	await tx.query(
+		"INSERT INTO rounds (id,game_id,question_id,sequence,starts_at,ends_at,expected_team_count,expected_team_ids) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)",
+		[
+			id,
 			gameId,
-			nextRoundAt,
-		]);
-		return {
-			gameId,
-			round: {
-				id,
-				sequence,
-				status: "OPEN" as const,
-				startsAt: now.toISOString(),
-				endsAt: endsAt.toISOString(),
-				question,
-			},
-			nextRoundAt: nextRoundAt.toISOString(),
-		};
-	});
+			question.id,
+			sequence,
+			now,
+			endsAt,
+			teams.rows.length,
+			teams.rows.map((team) => team.id),
+		],
+	);
+	await tx.query("UPDATE games SET next_round_at=$2 WHERE id=$1", [
+		gameId,
+		nextRoundAt,
+	]);
+	return {
+		gameId,
+		round: {
+			id,
+			sequence,
+			status: "OPEN" as const,
+			startsAt: now.toISOString(),
+			endsAt: endsAt.toISOString(),
+			question,
+		},
+		nextRoundAt: nextRoundAt.toISOString(),
+	};
 }
 
 export async function revealDueRound(
@@ -249,27 +256,13 @@ async function revealLockedRound(round: Round, tx: QueryDb, clock: Clock) {
 		explanation: string;
 		nextRoundAt: Date;
 	}>;
-	const results =
-		round.expected_team_ids === null
-			? null
-			: (
-					(await tx.query(
-						`SELECT t.id AS "teamId",t.name,a.value,COALESCE(a.is_correct,false) AS "isCorrect",COALESCE(a.points_awarded,0) AS "pointsAwarded"
-		FROM car_teams t LEFT JOIN answers a ON a.car_team_id=t.id AND a.round_id=$1
-		WHERE t.game_id=$2 AND t.id=ANY($3::uuid[]) ORDER BY t.name,t.id`,
-						[round.id, round.game_id, round.expected_team_ids],
-					)) as Rows<{
-						teamId: string;
-						name: string;
-						value: string | boolean | number | null;
-						isCorrect: boolean;
-						pointsAwarded: number;
-					}>
-				).rows;
-	const leaderboard = (await tx.query(
-		"SELECT id,name,status,score FROM car_teams WHERE game_id=$1 ORDER BY score DESC,name,id",
-		[round.game_id],
-	)) as Rows<{ id: string; name: string; status: string; score: number }>;
+	const results = await getRoundResults(
+		round.id,
+		round.game_id,
+		round.expected_team_ids,
+		tx,
+	);
+	const leaderboard = await getLeaderboard(round.game_id, tx);
 	return {
 		gameId: round.game_id,
 		roundId: round.id,
@@ -277,9 +270,33 @@ async function revealLockedRound(round: Round, tx: QueryDb, clock: Clock) {
 		correctAnswer: detail.rows[0].correctAnswer,
 		explanation: detail.rows[0].explanation,
 		results,
-		leaderboard: leaderboard.rows,
+		leaderboard,
 		nextRoundAt: new Date(detail.rows[0].nextRoundAt).toISOString(),
 	};
+}
+
+export async function getRoundResults(
+	roundId: string,
+	gameId: string,
+	teamIds: string[] | null,
+	tx: QueryDb,
+) {
+	if (teamIds === null) return null;
+	const results = (await tx.query(
+		`SELECT t.id AS "teamId",t.name,a.value,COALESCE(a.is_correct,false) AS "isCorrect",COALESCE(a.points_awarded,0) AS "pointsAwarded"
+		FROM car_teams t LEFT JOIN answers a ON a.car_team_id=t.id AND a.round_id=$1
+		WHERE t.game_id=$2 AND t.id=ANY($3::uuid[]) ORDER BY t.name,t.id`,
+		[roundId, gameId, teamIds],
+	)) as Rows<RoundResult>;
+	return results.rows;
+}
+
+export async function getLeaderboard(gameId: string, tx: QueryDb) {
+	const teams = (await tx.query(
+		"SELECT id,name,status,score,(rank() OVER (ORDER BY score DESC))::integer AS rank FROM car_teams WHERE game_id=$1 ORDER BY score DESC,name,id",
+		[gameId],
+	)) as Rows<GameSnapshot["leaderboard"][number]>;
+	return teams.rows;
 }
 
 export async function leaveGame(
