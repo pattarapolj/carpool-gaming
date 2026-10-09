@@ -92,9 +92,9 @@
 - [x] Run `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build`, `pnpm --filter @carpool/api test:postgres`, `pnpm --filter @carpool/api test:migrations` and `pnpm test:browser` with the dedicated `carpool_test` database.
 - [x] Update feature docs for topic selection, random no-repeat behavior, windows and the 325-question bank.
 - [x] Obtain independent contract/implementation review and content review; fix blocking findings.
-- [ ] Commit final docs/fixes, push one reviewable PR based on the host-game PR, and confirm all hosted checks pass.
-- [ ] Apply the verified Docker build to localhost without deleting volumes; verify health and a newly created selected-topic game.
+- [x] Commit final docs/fixes, push one reviewable PR based on the host-game PR, and confirm all hosted checks pass.
+- [x] Apply the verified Docker build to localhost without deleting volumes; verify health and a newly created selected-topic game.
 
 ## Completion
 
-All five tasks are committed; bank audit proves 325 distinct questions at 25 per topic; the full local and hosted suites pass; the local app serves the selected-topic flow with preserved database; public hosting and physical-device trials remain separate.
+All five tasks are committed; bank audit proves 325 distinct questions at 25 per topic; the full local and hosted suites pass; the local app serves the selected-topic flow with preserved database; public hosting and physical-device trials remain separate. PR #17 is open for final review and approval; it has not been merged.
