@@ -214,7 +214,7 @@ it("creates a puzzle round after switching from an empty trivia topic selection"
 		name: "Puzzle trip",
 		teamName: "Blue Sedan",
 		roundIntervalSeconds: 300,
-		puzzleSetup: { theme: "naruto", format: "CHARACTER" },
+		puzzleSetup: { theme: "melodies", format: "MUSIC" },
 	});
 });
 it("keeps join inputs after an error", async () => {

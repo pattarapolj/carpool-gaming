@@ -19,12 +19,12 @@ export const PuzzleThemeSchema = z.enum([
 	"melodies",
 	"taylor-swift",
 	"ed-sheeran",
+	"adele",
 	"songs-2000s",
 	"songs-2010s",
 	"songs-2020s",
 ]);
 export const PUZZLE_PACKS = [
-	{ id: "naruto", name: "Naruto", formats: ["CHARACTER"] },
 	{ id: "animals", name: "Animals", formats: ["PICTURE", "TRIVIA"] },
 	{ id: "melodies", name: "International ’90s songs", formats: ["MUSIC"] },
 	{ id: "songs-2000s", name: "International 2000s songs", formats: ["MUSIC"] },
@@ -32,6 +32,7 @@ export const PUZZLE_PACKS = [
 	{ id: "songs-2020s", name: "International 2020s songs", formats: ["MUSIC"] },
 	{ id: "taylor-swift", name: "Taylor Swift", formats: ["MUSIC"] },
 	{ id: "ed-sheeran", name: "Ed Sheeran", formats: ["MUSIC"] },
+	{ id: "adele", name: "Adele", formats: ["MUSIC"] },
 ] as const;
 export const PuzzleSetupSchema = z
 	.object({ theme: PuzzleThemeSchema, format: PuzzleFormatSchema })
@@ -81,7 +82,10 @@ export const PuzzleActionSchema = z.discriminatedUnion("kind", [
 		.object({
 			kind: z.literal("theme"),
 			roundId: RoundIdSchema,
-			theme: PuzzleThemeSchema,
+			theme: PuzzleThemeSchema.refine(
+				(theme) => theme !== "naruto",
+				"That theme is no longer available",
+			),
 		})
 		.strict(),
 	z

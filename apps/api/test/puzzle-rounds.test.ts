@@ -8,6 +8,7 @@ import type { GameDb } from "../src/services/auth";
 import { resolveSession } from "../src/services/auth";
 import { catalog } from "../src/services/puzzle-catalog";
 import { puzzleAction } from "../src/services/puzzle-service";
+import { songPacks } from "../src/services/song-packs";
 import * as songProvider from "../src/services/song-preview";
 import { previewFixture } from "./fixtures/song-recording";
 
@@ -30,6 +31,7 @@ it("requires authentication to load a song clip", async () => {
 it.each([
 	"taylor-swift",
 	"ed-sheeran",
+	"adele",
 	"songs-2000s",
 	"songs-2010s",
 	"songs-2020s",
@@ -39,8 +41,9 @@ it.each([
 		vi.stubGlobal("fetch", previewFixture);
 		const { id, tokens } = await setup(theme, "MUSIC", 1);
 		const p = (await snapshot(id, tokens[0])).puzzles;
-		expect(p.round.total).toBe(15);
-		expect(p.options).toHaveLength(15);
+		const total = songPacks[theme as keyof typeof songPacks].length;
+		expect(p.round.total).toBe(total);
+		expect(p.options).toHaveLength(total);
 		const response = await app.inject({
 			method: "POST",
 			url: `/v1/games/${id}/puzzles/clip`,
@@ -95,7 +98,7 @@ afterAll(async () => {
 	await app?.close();
 });
 
-async function setup(theme = "naruto", format = "CHARACTER", count = 3) {
+async function setup(theme = "animals", format = "TRIVIA", count = 3) {
 	const created = (
 		await app.inject({
 			method: "POST",
@@ -273,7 +276,7 @@ it("offers a recoverable error for unavailable song previews and denies cars tha
 	expect((await clip()).statusCode).toBe(403);
 });
 
-it("opens a timed shared sequence with private attribute feedback, repeat protection and restored skip state", async () => {
+it("opens a timed shared sequence with private guesses, repeat protection and restored skip state", async () => {
 	const { id, tokens } = await setup();
 	const first = await snapshot(id, tokens[0]);
 	const other = await snapshot(id, tokens[1]);
@@ -298,7 +301,7 @@ it("opens a timed shared sequence with private attribute feedback, repeat protec
 	).toBe(200);
 	const guessed = (await snapshot(id, tokens[0])).puzzles;
 	expect(guessed.puzzle.guesses).toHaveLength(1);
-	expect(guessed.puzzle.guesses[0].feedback.length).toBeGreaterThan(0);
+	expect(guessed.puzzle.guesses[0].feedback).toEqual([]);
 	expect((await snapshot(id, tokens[1])).puzzles.puzzle.guesses).toHaveLength(
 		0,
 	);
@@ -407,8 +410,13 @@ it("scores once at expiry and lets two distinct lowest cars choose the next roun
 	).toBe(200);
 	expect((await snapshot(id, themeToken)).puzzles.round.sequence).toBe(2);
 	expect(
-		(await action(id, themeToken, { kind: "theme", roundId, theme: "naruto" }))
-			.statusCode,
+		(
+			await action(id, themeToken, {
+				kind: "theme",
+				roundId,
+				theme: "melodies",
+			})
+		).statusCode,
 	).toBe(409);
 });
 
