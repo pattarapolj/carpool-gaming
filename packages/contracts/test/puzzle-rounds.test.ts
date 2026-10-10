@@ -33,6 +33,7 @@ it.each([
 	"taylor-swift",
 	"ed-sheeran",
 	"adele",
+	"kpop",
 	"songs-2000s",
 	"songs-2010s",
 	"songs-2020s",

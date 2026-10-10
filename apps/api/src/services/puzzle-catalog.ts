@@ -3,6 +3,7 @@ import type {
 	PuzzleFormat,
 	PuzzleView,
 } from "../../../../packages/contracts/src/puzzles";
+import { animalTrivia } from "./animal-trivia";
 import { songPacks } from "./song-packs";
 
 type Entry = {
@@ -150,7 +151,14 @@ const musicEntries: Record<string, Entry[]> = Object.fromEntries(
 );
 export const entries: Record<string, Entry[]> = {
 	naruto: characters,
-	animals,
+	animals: [
+		...animals,
+		...animalTrivia.map(([name], i) => ({
+			id: `animal-extra-${i}`,
+			name,
+			aliases: [],
+		})),
+	],
 	...musicEntries,
 	melodies: [...musicEntries.melodies, ...legacySongs],
 };
@@ -190,6 +198,16 @@ export const catalog: Puzzle[] = [
 			prompt: animalPrompts[i],
 		},
 	]),
+	...animalTrivia.flatMap(([, ...prompts], i) => {
+		const answerId = `animal-extra-${i}`;
+		return prompts.map((prompt, j) => ({
+			id: `trivia-${answerId}-${j}`,
+			theme: "animals",
+			format: "TRIVIA" as const,
+			answerId,
+			prompt,
+		}));
+	}),
 	...Object.entries(entries).flatMap(([theme, roster]) =>
 		roster
 			.filter((e) => e.trackId || e.notes)

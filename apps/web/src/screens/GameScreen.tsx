@@ -11,7 +11,7 @@ import type { GameSession } from "../session";
 import { useGameSnapshot } from "../useGameSnapshot";
 import { LobbyScreen } from "./LobbyScreen";
 import { PuzzleScreen } from "./PuzzleScreen";
-import { QuestionScreen } from "./QuestionScreen";
+import { formatAnswer, QuestionScreen } from "./QuestionScreen";
 import { Leaderboard, ResultsScreen } from "./ResultsScreen";
 
 export function GameScreen({
@@ -26,6 +26,11 @@ export function GameScreen({
 	const { snapshot, receivedAt, syncError, refresh } = useGameSnapshot(session);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [answerFeedback, setAnswerFeedback] = useState<{
+		roundId: string;
+		correct: boolean;
+		message: string;
+	} | null>(null);
 	const [confirmation, setConfirmation] = useState<"leave" | "end" | null>(
 		null,
 	);
@@ -95,7 +100,20 @@ export function GameScreen({
 		setBusy(true);
 		setError(null);
 		try {
-			await sendPuzzleAction(session, action);
+			const response = await sendPuzzleAction(session, action);
+			if (active.current) {
+				setAnswerFeedback(
+					response.result
+						? {
+								roundId: action.roundId,
+								correct: response.result.correct,
+								message: response.result.correct
+									? `Correct — ${response.result.name}. +${response.result.pointsAwarded} point.`
+									: `Incorrect — ${response.result.name}. Try again.`,
+							}
+						: null,
+				);
+			}
 			return true;
 		} catch (cause) {
 			if (active.current)
@@ -168,6 +186,19 @@ export function GameScreen({
 							</div>
 						</section>
 					) : null}
+					{answerFeedback &&
+					!complete &&
+					!hasLeft &&
+					(view.puzzles
+						? answerFeedback.roundId === view.puzzles.round.id
+						: answerFeedback.roundId !== view.round?.id) ? (
+						<p
+							className={`answer-feedback ${answerFeedback.correct ? "feedback-correct" : "feedback-incorrect"}`}
+							role="status"
+						>
+							{answerFeedback.message}
+						</p>
+					) : null}
 					{view.puzzles && !hasLeft ? (
 						<PuzzleScreen
 							session={session}
@@ -188,9 +219,17 @@ export function GameScreen({
 								session={session}
 								snapshot={view}
 								receivedAt={receivedAt}
-								onSubmit={(value) =>
-									submitAnswer(session, view.round?.id as string, value)
-								}
+								onSubmit={async (value) => {
+									const roundId = view.round?.id as string;
+									const response = await submitAnswer(session, roundId, value);
+									if (active.current && response?.isCorrect != null)
+										setAnswerFeedback({
+											roundId,
+											correct: response.isCorrect,
+											message: `Last answer: ${formatAnswer(value)} — ${response.isCorrect ? "Correct. +1 point." : "Incorrect. 0 points."}`,
+										});
+									return response;
+								}}
 								onRefresh={refresh}
 							/>
 							{view.previousRound ? (

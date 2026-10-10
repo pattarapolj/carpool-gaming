@@ -1,5 +1,17 @@
 import { expect, it } from "vitest";
+import { catalog } from "../src/services/puzzle-catalog";
 import { songPacks } from "../src/services/song-packs";
+
+it("offers 100 distinct K-pop recordings and at least 100 animal trivia questions", () => {
+	expect(songPacks.kpop).toHaveLength(100);
+	expect(new Set(songPacks.kpop.map((t) => t[0])).size).toBe(100);
+	const trivia = catalog.filter(
+		(p) => p.theme === "animals" && p.format === "TRIVIA",
+	);
+	expect(trivia.length).toBeGreaterThanOrEqual(100);
+	expect(new Set(trivia.map((p) => p.id)).size).toBe(trivia.length);
+	expect(new Set(trivia.map((p) => p.prompt)).size).toBe(trivia.length);
+});
 
 it.each([
 	[

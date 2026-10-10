@@ -324,6 +324,9 @@ export async function puzzleAction(
 	clock = () => new Date(),
 ) {
 	return db.transaction(async (tx) => {
+		let result:
+			| { name: string; correct: boolean; pointsAwarded: 0 | 1 }
+			| undefined;
 		const game = (
 			(await tx.query(
 				"SELECT status,started_at,puzzle_setup,round_interval_seconds FROM games WHERE id::text=$1 FOR UPDATE",
@@ -487,6 +490,17 @@ export async function puzzleAction(
 							"Choose an answer from the suggestions",
 						);
 					const guesses = progress.guesses[currentId] ?? [];
+					result = {
+						name:
+							entries[round.theme].find((e) => e.id === action.answerId)
+								?.name ?? "",
+						correct: action.answerId === puzzle.answerId,
+						pointsAwarded:
+							action.answerId === puzzle.answerId &&
+							!progress.solved.includes(currentId)
+								? 1
+								: 0,
+					};
 					if (!guesses.includes(action.answerId)) guesses.push(action.answerId);
 					progress.guesses[currentId] = guesses;
 					if (action.answerId === puzzle.answerId) {
@@ -518,6 +532,6 @@ export async function puzzleAction(
 				],
 			);
 		}
-		return { ok: true };
+		return { ok: true, ...(result ? { result } : {}) };
 	});
 }

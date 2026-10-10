@@ -263,6 +263,8 @@ it("publishes identical safe start/reveal data to host/captains and locks only t
 	expect(second.statusCode).toBe(200);
 	expect(Object.keys(second.json()).sort()).toEqual([
 		"answerId",
+		"isCorrect",
+		"pointsAwarded",
 		"roundEndsAt",
 		"status",
 	]);

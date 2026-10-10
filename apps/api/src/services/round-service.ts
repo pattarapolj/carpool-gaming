@@ -22,6 +22,7 @@ type Round = {
 	expected_team_count: number;
 	type: "MULTIPLE_CHOICE" | "TRUE_FALSE" | "ESTIMATE";
 	choices: string[] | null;
+	correct_answer: string | boolean | number;
 	expected_team_ids: string[] | null;
 	game_status: string;
 	game_started_at: Date | null;
@@ -64,7 +65,7 @@ async function lockRound(roundId: string, db: QueryDb) {
 	if (!games.rows[0])
 		throw new RoundError(404, "ROUND_NOT_FOUND", "Round not found");
 	const rounds = (await db.query(
-		"SELECT r.*, q.type, q.choices,g.status AS game_status,g.started_at AS game_started_at FROM rounds r JOIN questions q ON q.id=r.question_id JOIN games g ON g.id=r.game_id WHERE r.id=$1 FOR UPDATE OF r",
+		"SELECT r.*, q.type, q.choices,q.correct_answer,g.status AS game_status,g.started_at AS game_started_at FROM rounds r JOIN questions q ON q.id=r.question_id JOIN games g ON g.id=r.game_id WHERE r.id=$1 FOR UPDATE OF r",
 		[roundId],
 	)) as Rows<Round>;
 	return rounds.rows[0];
@@ -116,8 +117,11 @@ export async function lockAnswer(
 		if (!valid)
 			throw new RoundError(422, "INVALID_ANSWER_VALUE", "Invalid answer value");
 		const answerId = randomUUID();
+		const isCorrect =
+			round.type === "ESTIMATE" ? null : value === round.correct_answer;
+		const pointsAwarded = isCorrect ? 1 : 0;
 		await tx.query(
-			"INSERT INTO answers (id,game_id,round_id,car_team_id,value,submitted_at) VALUES ($1,$2,$3,$4,$5::jsonb,$6)",
+			"INSERT INTO answers (id,game_id,round_id,car_team_id,value,submitted_at,is_correct,points_awarded) VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7,$8)",
 			[
 				answerId,
 				round.game_id,
@@ -125,12 +129,21 @@ export async function lockAnswer(
 				session.teamId,
 				JSON.stringify(value),
 				now,
+				isCorrect,
+				pointsAwarded,
 			],
 		);
+		if (pointsAwarded)
+			await tx.query("UPDATE car_teams SET score=score+$2 WHERE id=$1", [
+				session.teamId,
+				pointsAwarded,
+			]);
 		const answer: SubmittedAnswer = {
 			answerId,
 			status: "locked",
 			roundEndsAt: new Date(round.ends_at).toISOString(),
+			isCorrect,
+			pointsAwarded,
 		};
 		const reveal = await revealLockedRound(round, tx, () => now);
 		const next =
@@ -353,14 +366,14 @@ async function revealLockedRound(
 	// on opposite ends of the JavaScript number range are compared.
 	await tx.query(
 		`WITH distances AS (
-		SELECT a.id, a.value=q.correct_answer AS matches,
+		SELECT a.id, COALESCE(a.points_awarded,0) AS previous_points, a.value=q.correct_answer AS matches,
 		 CASE WHEN q.type='ESTIMATE' THEN abs((a.value #>> '{}')::numeric - (q.correct_answer #>> '{}')::numeric) END AS distance
 		FROM answers a JOIN rounds r ON r.id=a.round_id JOIN questions q ON q.id=r.question_id WHERE a.round_id=$1
 	), grades AS (
-		SELECT id, CASE WHEN distance IS NULL THEN matches ELSE distance=min(distance) OVER () END AS correct FROM distances
+		SELECT id,previous_points, CASE WHEN distance IS NULL THEN matches ELSE distance=min(distance) OVER () END AS correct FROM distances
 	), scored AS (
 		UPDATE answers a SET is_correct=g.correct,points_awarded=CASE WHEN g.correct THEN 1 ELSE 0 END
-		FROM grades g WHERE a.id=g.id RETURNING a.car_team_id,a.points_awarded
+		FROM grades g WHERE a.id=g.id RETURNING a.car_team_id,a.points_awarded-g.previous_points AS points_awarded
 	)
 	UPDATE car_teams t SET score=t.score+s.points_awarded FROM scored s WHERE t.id=s.car_team_id`,
 		[round.id],
@@ -590,7 +603,14 @@ export async function getRoundResults(
 
 export async function getLeaderboard(gameId: string, tx: QueryDb) {
 	const teams = (await tx.query(
-		"SELECT id,name,status,score,(rank() OVER (ORDER BY score DESC))::integer AS rank FROM car_teams WHERE game_id=$1 ORDER BY score DESC,name,id",
+		`WITH live_scores AS (
+		 SELECT t.id,t.name,t.status,t.score+COALESCE(p.solved,0) AS score
+		 FROM car_teams t LEFT JOIN (
+		  SELECT p.team_id,cardinality(p.solved) AS solved FROM puzzle_progress p
+		  JOIN puzzle_rounds r ON r.id=p.round_id WHERE r.game_id=$1 AND r.status='OPEN'
+		 ) p ON p.team_id=t.id WHERE t.game_id=$1
+		) SELECT id,name,status,score,(rank() OVER (ORDER BY score DESC))::integer AS rank
+		FROM live_scores ORDER BY score DESC,name,id`,
 		[gameId],
 	)) as Rows<GameSnapshot["leaderboard"][number]>;
 	return teams.rows;

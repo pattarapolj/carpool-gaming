@@ -429,12 +429,14 @@ export async function getGameSnapshot(
 			else if (visibleRound.status === "REVEALED") previousRound = visibleRound;
 			if (index === 0 && callerTeam) {
 				const answers = (await tx.query(
-					'SELECT id AS "answerId",value,submitted_at AS "submittedAt" FROM answers WHERE round_id=$1 AND car_team_id=$2',
+					'SELECT id AS "answerId",value,submitted_at AS "submittedAt",is_correct AS "isCorrect",COALESCE(points_awarded,0) AS "pointsAwarded" FROM answers WHERE round_id=$1 AND car_team_id=$2',
 					[latest.id, callerTeam.id],
 				)) as QueryResult<{
 					answerId: string;
 					value: string | boolean | number;
 					submittedAt: Date;
+					isCorrect: boolean | null;
+					pointsAwarded: 0 | 1;
 				}>;
 				if (answers.rows[0])
 					ownAnswer = {
@@ -457,7 +459,11 @@ export async function getGameSnapshot(
 				nextRoundAt: toISOString(game.nextRoundAt),
 				completedAt: toISOString(game.completedAt),
 			},
-			teams: teamsResult.rows,
+			teams: teamsResult.rows.map((team) => ({
+				...team,
+				score:
+					leaderboard.find((row) => row.id === team.id)?.score ?? team.score,
+			})),
 			round,
 			previousRound,
 			ownAnswer,

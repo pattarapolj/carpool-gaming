@@ -20,12 +20,14 @@ export const PuzzleThemeSchema = z.enum([
 	"taylor-swift",
 	"ed-sheeran",
 	"adele",
+	"kpop",
 	"songs-2000s",
 	"songs-2010s",
 	"songs-2020s",
 ]);
 export const PUZZLE_PACKS = [
 	{ id: "animals", name: "Animals", formats: ["PICTURE", "TRIVIA"] },
+	{ id: "kpop", name: "K-pop · 100 songs", formats: ["MUSIC"] },
 	{ id: "melodies", name: "International ’90s songs", formats: ["MUSIC"] },
 	{ id: "songs-2000s", name: "International 2000s songs", formats: ["MUSIC"] },
 	{ id: "songs-2010s", name: "International 2010s songs", formats: ["MUSIC"] },
@@ -98,7 +100,16 @@ export const PuzzleActionSchema = z.discriminatedUnion("kind", [
 ]);
 export type PuzzleAction = z.infer<typeof PuzzleActionSchema>;
 export const PuzzleActionResponseSchema = z
-	.object({ ok: z.literal(true) })
+	.object({
+		ok: z.literal(true),
+		result: z
+			.object({
+				name: z.string(),
+				correct: z.boolean(),
+				pointsAwarded: z.union([z.literal(0), z.literal(1)]),
+			})
+			.optional(),
+	})
 	.strict();
 export const PuzzleViewSchema = z
 	.object({

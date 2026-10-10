@@ -49,6 +49,8 @@ export const SubmitAnswerResponseSchema = z.object({
 	answerId: z.string().uuid(),
 	status: z.literal("locked"),
 	roundEndsAt: z.string().datetime(),
+	isCorrect: z.boolean().nullable().optional(),
+	pointsAwarded: z.union([z.literal(0), z.literal(1)]).optional(),
 });
 
 export const LeaveGameSchema = z.object({});
@@ -227,6 +229,8 @@ export const GameSnapshotSchema = z
 				answerId: z.string().uuid(),
 				value: AnswerValueSchema,
 				submittedAt: z.string().datetime(),
+				isCorrect: z.boolean().nullable().optional(),
+				pointsAwarded: z.union([z.literal(0), z.literal(1)]).optional(),
 			})
 			.strict()
 			.nullable(),

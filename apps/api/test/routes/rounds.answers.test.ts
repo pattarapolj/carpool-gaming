@@ -8,6 +8,7 @@ import {
 } from "../../../../packages/contracts/src/index";
 import { buildServer } from "../../src/server";
 import { type GameDb, hashToken } from "../../src/services/auth";
+import { revealDueRound } from "../../src/services/round-service";
 
 let db: PGlite;
 let app: ReturnType<typeof buildServer>;
@@ -22,6 +23,7 @@ beforeAll(async () => {
 		"001_games.sql",
 		"002_car_teams.sql",
 		"003_round_storage.sql",
+		"005_game_completion.sql",
 		"006_question_topics.sql",
 		"007_puzzle_rounds.sql",
 	]) {
@@ -127,6 +129,63 @@ async function fixture(type = "MULTIPLE_CHOICE") {
 	);
 	return { id, team, round, headers: { authorization: `Bearer ${team}` } };
 }
+
+it("grades and counts a correct choice immediately and never scores it twice", async () => {
+	const f = await fixture();
+	const response = await app.inject({
+		method: "POST",
+		url: `/v1/rounds/${f.round}/answers`,
+		headers: f.headers,
+		payload: { value: "Jupiter" },
+	});
+	expect(response.json()).toMatchObject({ isCorrect: true, pointsAwarded: 1 });
+	expect(
+		(
+			await db.query<{ score: number }>(
+				"SELECT score FROM car_teams WHERE id=$1",
+				[f.team],
+			)
+		).rows[0].score,
+	).toBe(1);
+	const snapshot = await app.inject({
+		method: "GET",
+		url: `/v1/games/${f.id}/snapshot`,
+		headers: f.headers,
+	});
+	expect(snapshot.statusCode).toBe(200);
+	expect(snapshot.json().ownAnswer).toMatchObject({
+		isCorrect: true,
+		pointsAwarded: 1,
+	});
+	const deadline = (
+		await db.query<{ ends_at: Date }>(
+			"SELECT ends_at FROM rounds WHERE id=$1",
+			[f.round],
+		)
+	).rows[0].ends_at;
+	await revealDueRound(f.round, storage, () => new Date(deadline));
+	await revealDueRound(f.round, storage, () => new Date(deadline));
+	expect(
+		(
+			await db.query<{ score: number }>(
+				"SELECT score FROM car_teams WHERE id=$1",
+				[f.team],
+			)
+		).rows[0].score,
+	).toBe(1);
+});
+
+it("returns an incorrect grade without awarding points", async () => {
+	const f = await fixture();
+	const response = await app.inject({
+		method: "POST",
+		url: `/v1/rounds/${f.round}/answers`,
+		headers: f.headers,
+		payload: { value: "Saturn" },
+	});
+	expect(response.statusCode).toBe(200);
+	expect(response.json()).toMatchObject({ isCorrect: false, pointsAwarded: 0 });
+});
 
 it.each([
 	["MULTIPLE_CHOICE", "Mars"],

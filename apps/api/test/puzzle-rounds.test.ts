@@ -1,3 +1,4 @@
+import * as crypto from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
@@ -12,10 +13,16 @@ import { songPacks } from "../src/services/song-packs";
 import * as songProvider from "../src/services/song-preview";
 import { previewFixture } from "./fixtures/song-recording";
 
+vi.mock("node:crypto", async (importOriginal) => {
+	const actual = await importOriginal<typeof crypto>();
+	return { ...actual, randomInt: vi.fn(actual.randomInt) };
+});
+
 let db: PGlite;
 let storage: GameDb;
 let app: ReturnType<typeof buildServer>;
 afterEach(() => {
+	vi.mocked(crypto.randomInt).mockReset();
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
 });
@@ -32,6 +39,7 @@ it.each([
 	"taylor-swift",
 	"ed-sheeran",
 	"adele",
+	"kpop",
 	"songs-2000s",
 	"songs-2010s",
 	"songs-2020s",
@@ -346,6 +354,9 @@ it("scores once at expiry and lets two distinct lowest cars choose the next roun
 		answerId: await answerFor(view.round.id, view.puzzle.id),
 	});
 	const deadline = new Date(view.round.endsAt);
+	const live = await snapshot(id, tokens[0]);
+	expect(live.callerTeam.score).toBe(1);
+	expect(live.leaderboard[0].score).toBe(1);
 	await tick(storage, () => deadline);
 	await tick(storage, () => deadline);
 	const ended = await snapshot(id, tokens[0]);
@@ -418,6 +429,46 @@ it("scores once at expiry and lets two distinct lowest cars choose the next roun
 			})
 		).statusCode,
 	).toBe(409);
+});
+
+it("returns immediate correct and incorrect feedback before advancing puzzles", async () => {
+	const { id, tokens } = await setup();
+	const view = (await snapshot(id, tokens[0])).puzzles;
+	const target = await answerFor(view.round.id, view.puzzle.id);
+	const wrong = view.options.find((o: { id: string }) => o.id !== target).id;
+	for (const answerId of [wrong, target]) {
+		const response = await action(id, tokens[0], {
+			kind: "guess",
+			roundId: view.round.id,
+			puzzleId: view.puzzle.id,
+			answerId,
+		});
+		expect(response.json().result).toMatchObject({
+			correct: answerId === target,
+			pointsAwarded: answerId === target ? 1 : 0,
+		});
+	}
+	expect((await snapshot(id, tokens[0])).puzzles.puzzle.id).not.toBe(
+		view.puzzle.id,
+	);
+});
+
+it("shuffles every supported pack without duplicates", async () => {
+	vi.mocked(crypto.randomInt).mockImplementation(() => 0);
+	for (const pack of PUZZLE_PACKS)
+		for (const format of pack.formats) {
+			const { id, tokens } = await setup(pack.id, format, 1);
+			const view = (await snapshot(id, tokens[0])).puzzles;
+			const expected = catalog
+				.filter((p) => !p.legacy && p.theme === pack.id && p.format === format)
+				.map((p) => p.id);
+			const { rows } = await db.query<{ puzzle_ids: string[] }>(
+				"SELECT puzzle_ids FROM puzzle_rounds WHERE id=$1",
+				[view.round.id],
+			);
+			expect([...rows[0].puzzle_ids].sort()).toEqual([...expected].sort());
+			expect(rows[0].puzzle_ids).not.toEqual(expected);
+		}
 });
 
 it("validates guesses, rejects cross-game tokens and stops expired and departed teams", async () => {
@@ -529,7 +580,7 @@ it("keeps skipped puzzles reachable after exhausting a pack and never counts a s
 		});
 		view = (await snapshot(id, tokens[0])).puzzles;
 	}
-	expect(view.solved).toBe(7);
+	expect(view.solved).toBe(view.round.total - 1);
 	expect(view.skipped).toEqual([{ id: first, number: 1 }]);
 	await action(id, tokens[0], {
 		kind: "revisit",
@@ -542,7 +593,7 @@ it("keeps skipped puzzles reachable after exhausting a pack and never counts a s
 		puzzleId: first,
 		answerId: await answerFor(view.round.id, first),
 	});
-	expect((await snapshot(id, tokens[0])).puzzles.solved).toBe(8);
+	expect((await snapshot(id, tokens[0])).puzzles.solved).toBe(view.round.total);
 	expect(
 		(
 			await action(id, tokens[0], {

@@ -13,6 +13,47 @@ import { gameSnapshot, session } from "../test/game-fixtures";
 import { QuestionScreen } from "./QuestionScreen";
 
 afterEach(cleanup);
+it("shows immediate correctness and points for the locked answer", async () => {
+	const snapshot = gameSnapshot();
+	render(
+		<QuestionScreen
+			session={session}
+			snapshot={snapshot}
+			receivedAt={0}
+			onSubmit={vi.fn(async () => ({
+				answerId: "f6a4248a-0b6c-476f-81dd-e71de45a8d7d",
+				status: "locked",
+				roundEndsAt: new Date().toISOString(),
+				isCorrect: true,
+				pointsAwarded: 1,
+			}))}
+			onRefresh={vi.fn()}
+		/>,
+	);
+	fireEvent.click(screen.getByLabelText("False"));
+	fireEvent.click(screen.getByRole("button", { name: "Confirm team answer" }));
+	expect(await screen.findByText("Correct · +1 point")).toBeTruthy();
+});
+it("restores incorrect feedback from the snapshot", () => {
+	const snapshot = gameSnapshot();
+	snapshot.ownAnswer = {
+		answerId: "f6a4248a-0b6c-476f-81dd-e71de45a8d7d",
+		value: true,
+		submittedAt: new Date().toISOString(),
+		isCorrect: false,
+		pointsAwarded: 0,
+	};
+	render(
+		<QuestionScreen
+			session={session}
+			snapshot={snapshot}
+			receivedAt={0}
+			onSubmit={vi.fn()}
+			onRefresh={vi.fn()}
+		/>,
+	);
+	expect(screen.getByText("Incorrect · 0 points")).toBeTruthy();
+});
 it("requires separate confirmation, sends actual false, and restores controls on failed submission", async () => {
 	const user = userEvent.setup();
 	const submit = vi

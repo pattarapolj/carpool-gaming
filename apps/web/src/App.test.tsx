@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 	join: vi.fn(),
 	create: vi.fn(),
 	submit: vi.fn(),
+	puzzle: vi.fn(),
 }));
 vi.mock("./useGameSnapshot", () => ({ useGameSnapshot: mocks.view }));
 vi.mock("./api", () => ({
@@ -23,9 +24,66 @@ vi.mock("./api", () => ({
 	joinGame: mocks.join,
 	createGame: mocks.create,
 	submitAnswer: mocks.submit,
+	sendPuzzleAction: mocks.puzzle,
 }));
 let snapshot = gameSnapshot();
 const refresh = vi.fn();
+
+it("keeps correct puzzle feedback visible after advancing to the next puzzle", async () => {
+	const roundId = "a6775a41-50ab-4d61-b1fa-f9f07a28c62b";
+	snapshot.puzzles = {
+		round: {
+			id: roundId,
+			sequence: 1,
+			theme: "animals",
+			format: "TRIVIA",
+			status: "OPEN",
+			startsAt: snapshot.serverTime,
+			endsAt: "2099-10-08T10:05:00.000Z",
+			total: 100,
+		},
+		solved: 0,
+		puzzle: {
+			id: "round/0",
+			number: 1,
+			prompt: "Which pet barks?",
+			media: null,
+			guesses: [],
+		},
+		skipped: [],
+		options: [{ id: "dog", name: "Dog", aliases: [] }],
+		results: [],
+		selection: { theme: null, themeTeamId: null, formatTeamId: null },
+	};
+	mocks.puzzle.mockImplementationOnce(async () => {
+		if (!snapshot.puzzles) throw new Error("Missing fixture puzzles");
+		snapshot = {
+			...snapshot,
+			puzzles: {
+				...snapshot.puzzles,
+				solved: 1,
+				puzzle: {
+					id: "round/1",
+					number: 2,
+					prompt: "Which pet purrs?",
+					media: null,
+					guesses: [],
+				},
+			},
+		};
+		return {
+			ok: true,
+			result: { name: "Dog", correct: true, pointsAwarded: 1 },
+		};
+	});
+	resume();
+	fireEvent.change(screen.getByLabelText("Search answers"), {
+		target: { value: "Dog" },
+	});
+	fireEvent.click(screen.getByRole("button", { name: "Guess" }));
+	expect(await screen.findByText("Correct — Dog. +1 point.")).toBeTruthy();
+	expect(screen.getByText("Which pet purrs?")).toBeTruthy();
+});
 
 it("keeps the previous result visible while the next question accepts answers", () => {
 	const previous = gameSnapshot().round;

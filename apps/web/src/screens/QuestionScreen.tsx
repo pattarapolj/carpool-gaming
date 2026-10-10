@@ -1,4 +1,8 @@
-import type { GameSnapshot, SubmitAnswerInput } from "@carpool/contracts";
+import {
+	type GameSnapshot,
+	type SubmitAnswerInput,
+	SubmitAnswerResponseSchema,
+} from "@carpool/contracts";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import type { GameSession } from "../session";
 import { Countdown } from "./Countdown";
@@ -29,6 +33,7 @@ export function QuestionScreen({
 	const [selection, setSelection] = useState<AnswerValue | null>(null);
 	const [estimate, setEstimate] = useState("");
 	const [confirmed, setConfirmed] = useState<AnswerValue | null>(null);
+	const [correctness, setCorrectness] = useState<boolean | null | undefined>();
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const active = useRef(true);
@@ -42,6 +47,9 @@ export function QuestionScreen({
 	if (round?.status !== "OPEN") return null;
 	const canAnswer = snapshot.callerTeam?.status === "ACTIVE";
 	const locked = canAnswer ? (snapshot.ownAnswer?.value ?? confirmed) : null;
+	const isCorrect = snapshot.ownAnswer
+		? snapshot.ownAnswer.isCorrect
+		: correctness;
 	const choices: AnswerValue[] =
 		round.question.type === "TRUE_FALSE"
 			? [true, false]
@@ -59,8 +67,13 @@ export function QuestionScreen({
 		setBusy(true);
 		setError(null);
 		try {
-			await onSubmit(value);
-			if (active.current) setConfirmed(value);
+			const result = SubmitAnswerResponseSchema.safeParse(
+				await onSubmit(value),
+			);
+			if (active.current) {
+				setConfirmed(value);
+				if (result.success) setCorrectness(result.data.isCorrect);
+			}
 		} catch (cause) {
 			if (active.current)
 				setError(
@@ -102,10 +115,21 @@ export function QuestionScreen({
 					</svg>
 					<div>
 						<h3>Answer locked</h3>
+						{isCorrect !== undefined && isCorrect !== null ? (
+							<p
+								className={`answer-feedback ${isCorrect ? "feedback-correct" : "feedback-incorrect"}`}
+							>
+								{isCorrect ? "Correct · +1 point" : "Incorrect · 0 points"}
+							</p>
+						) : null}
 						<p>
 							Your team answer: <strong>{formatAnswer(locked)}</strong>
 						</p>
-						<p>Waiting for the server to reveal the results.</p>
+						<p>
+							{round.question.type === "ESTIMATE"
+								? "Closest estimate wins. Points are awarded after all cars answer."
+								: "Your points are counted. Waiting for the other cars."}
+						</p>
 					</div>
 				</div>
 			) : canAnswer ? (

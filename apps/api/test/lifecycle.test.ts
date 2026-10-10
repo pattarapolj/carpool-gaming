@@ -251,7 +251,7 @@ it("host-end grading and completion failure roll back together before retry", as
 			completedAt: null,
 		});
 		expect(unchanged.round?.status).toBe("OPEN");
-		expect(unchanged.leaderboard.map((t) => t.score)).toEqual([0, 0]);
+		expect(unchanged.leaderboard.map((t) => t.score)).toEqual([1, 0]);
 	} finally {
 		await db.exec(
 			"DROP TRIGGER fail_complete ON games; DROP FUNCTION fail_complete()",

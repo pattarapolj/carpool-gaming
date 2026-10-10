@@ -483,7 +483,7 @@ it("rolls back grades, scores, reveal and the final answer when scoring fails", 
 			"SELECT is_correct,points_awarded FROM answers WHERE round_id=$1",
 			[opened.round.id],
 		);
-		expect(answers.rows).toEqual([{ is_correct: null, points_awarded: null }]);
+		expect(answers.rows).toEqual([{ is_correct: true, points_awarded: 1 }]);
 	} finally {
 		await db.exec("ALTER TABLE car_teams DROP CONSTRAINT test_no_points");
 	}
