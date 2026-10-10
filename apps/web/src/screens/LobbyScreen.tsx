@@ -38,9 +38,6 @@ export function LobbyScreen({
 	return (
 		<section className="lobby-layout">
 			<div className="lobby-heading">
-				<p className="eyebrow">
-					{host ? "YOUR CONVOY" : "YOU'RE ON THE ROSTER"}
-				</p>
 				<h1>{snapshot.game.name}</h1>
 				<p className="lobby-subtitle">
 					{waiting
@@ -54,7 +51,6 @@ export function LobbyScreen({
 			<div className="lobby-grid">
 				<section className="invite-card" aria-labelledby="join-code-heading">
 					<div className="invite-topline">
-						<span className="eyebrow">INVITE ANOTHER CAR</span>
 						<span
 							className={`status-pill ${waiting ? "status-open" : "status-live"}`}
 						>
@@ -102,7 +98,6 @@ export function LobbyScreen({
 				<section className="roster-card" aria-labelledby="roster-heading">
 					<div className="roster-heading">
 						<div>
-							<p className="eyebrow">THE LINEUP</p>
 							<h2 id="roster-heading">Cars in the game</h2>
 						</div>
 						<span className="team-count">
@@ -152,7 +147,6 @@ export function LobbyScreen({
 			{host && waiting ? (
 				<section className="start-panel" aria-label="Start the game">
 					<div>
-						<p className="eyebrow">WHEN YOU'RE READY</p>
 						<h2>Take it from here.</h2>
 					</div>
 					<div className="start-actions">
@@ -170,6 +164,7 @@ export function LobbyScreen({
 						)}
 						<button
 							className="primary-button start-button"
+							aria-busy={busy}
 							disabled={busy || !canStart}
 							onClick={onStart}
 							type="button"
@@ -179,15 +174,14 @@ export function LobbyScreen({
 								: practiceStart
 									? "Start practice game"
 									: "Start game"}
-							<span aria-hidden="true">↗</span>
+							<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+								<path d="M5 12h14m-6-6 6 6-6 6" />
+							</svg>
 						</button>
 					</div>
 				</section>
 			) : (
 				<section className="wait-panel" aria-live="polite">
-					<span aria-hidden="true" className="wait-icon">
-						✳
-					</span>
 					<div>
 						<strong>{host ? "Game started" : "Waiting for the host"}</strong>
 						<p>

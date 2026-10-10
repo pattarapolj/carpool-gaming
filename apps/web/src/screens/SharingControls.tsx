@@ -42,7 +42,11 @@ export function SharingControls({ joinCode }: { joinCode: string }) {
 					</button>
 				) : null}
 			</div>
-			{message ? <p role="status">{message}</p> : null}
+			{message ? (
+				<p className="share-feedback" role="status">
+					{message}
+				</p>
+			) : null}
 		</div>
 	);
 }

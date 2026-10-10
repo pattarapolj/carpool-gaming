@@ -12,7 +12,10 @@ export function Leaderboard({ snapshot }: { snapshot: GameSnapshot }) {
 			</h2>
 			<ol className="team-list">
 				{snapshot.leaderboard.map((team) => (
-					<li className="team-row" key={team.id}>
+					<li
+						className={`team-row ${team.rank === 1 ? "team-leading" : ""}`}
+						key={team.id}
+					>
 						<span
 							className="team-number"
 							role="img"
@@ -66,7 +69,6 @@ export function ResultsScreen({
 		<>
 			{complete ? (
 				<section className="game-card">
-					<p className="eyebrow">JOURNEY COMPLETE</p>
 					<h2>Thanks for playing together.</h2>
 					<p>
 						{snapshot.game.completionReason
@@ -77,7 +79,7 @@ export function ResultsScreen({
 			) : null}
 			{round?.status === "REVEALED" ? (
 				<section className="game-card" aria-labelledby="results-heading">
-					<p className="eyebrow">ROUND {round.sequence} RESULTS</p>
+					<p className="round-meta">ROUND {round.sequence} RESULTS</p>
 					<h2 id="results-heading">{round.question.prompt}</h2>
 					<p className="revealed-answer">
 						Answer: <strong>{formatAnswer(round.correctAnswer)}</strong>
@@ -86,7 +88,10 @@ export function ResultsScreen({
 					{round.results ? (
 						<ul className="team-list">
 							{round.results.map((result) => (
-								<li className="result-row" key={result.teamId}>
+								<li
+									className={`result-row ${result.isCorrect ? "result-correct" : ""}`}
+									key={result.teamId}
+								>
 									<strong>{result.name}</strong>
 									<span>
 										{formatAnswer(result.value)} ·{" "}

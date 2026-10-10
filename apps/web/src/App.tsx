@@ -123,22 +123,30 @@ export default function App() {
 			<Brand />
 			<div className="welcome-layout">
 				<section className="welcome-copy">
-					<p className="eyebrow">A GAME FOR THE ROAD</p>
 					<h1>
 						Make the miles
 						<br />
-						more memorable.
+						<em>more memorable.</em>
 					</h1>
 					<p className="welcome-description">
 						One phone per car. Everyone plays together. Drivers keep their eyes
 						on the road.
 					</p>
-					<div className="route-stamp" aria-hidden="true">
-						<span>PASSENGER PICKS</span>
-						<span>·</span>
-						<span>TEAM ANSWERS</span>
-						<span>·</span>
-						<span>GOOD COMPANY</span>
+					<div className="journey-guide">
+						<svg viewBox="0 0 360 48" fill="none" aria-hidden="true">
+							<path
+								className="journey-line"
+								d="M12 24H120C150 24 150 8 180 8S210 24 240 24H348"
+							/>
+							<circle cx="12" cy="24" r="5" />
+							<circle cx="180" cy="8" r="5" />
+							<circle cx="348" cy="24" r="5" />
+						</svg>
+						<div>
+							<span>Host a game</span>
+							<span>Invite your cars</span>
+							<span>Play together</span>
+						</div>
 					</div>
 				</section>
 
@@ -170,9 +178,13 @@ export default function App() {
 					</fieldset>
 
 					{mode === "create" ? (
-						<form className="access-form" onSubmit={handleCreate}>
+						<form
+							key="create"
+							className="access-form"
+							onSubmit={handleCreate}
+							aria-busy={busy}
+						>
 							<div>
-								<p className="eyebrow form-eyebrow">START THE CONVOY</p>
 								<h2>Set up your game</h2>
 							</div>
 							<label htmlFor="game-name">Game name</label>
@@ -314,16 +326,23 @@ export default function App() {
 								disabled={
 									busy || (playStyle === "trivia" && topics.length === 0)
 								}
+								aria-busy={busy}
 								type="submit"
 							>
 								{busy ? "Creating game…" : "Create game"}
-								<span aria-hidden="true">↗</span>
+								<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+									<path d="M5 12h14m-6-6 6 6-6 6" />
+								</svg>
 							</button>
 						</form>
 					) : (
-						<form className="access-form" onSubmit={handleJoin}>
+						<form
+							key="join"
+							className="access-form"
+							onSubmit={handleJoin}
+							aria-busy={busy}
+						>
 							<div>
-								<p className="eyebrow form-eyebrow">YOUR CAR, YOUR TEAM</p>
 								<h2>Join the game</h2>
 							</div>
 							<label htmlFor="join-code">Six-character join code</label>
@@ -359,9 +378,16 @@ export default function App() {
 									{error}
 								</p>
 							)}
-							<button className="primary-button" disabled={busy} type="submit">
+							<button
+								className="primary-button"
+								disabled={busy}
+								aria-busy={busy}
+								type="submit"
+							>
 								{busy ? "Joining game…" : "Join game"}
-								<span aria-hidden="true">↗</span>
+								<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+									<path d="M5 12h14m-6-6 6 6-6 6" />
+								</svg>
 							</button>
 						</form>
 					)}
