@@ -16,6 +16,8 @@ RUN pnpm build
 
 FROM node:22-slim AS runtime
 
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 RUN corepack enable
 

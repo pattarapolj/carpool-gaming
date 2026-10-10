@@ -6,16 +6,20 @@ import {
 	type PuzzleView,
 } from "@carpool/contracts";
 import { useEffect, useState } from "react";
+import { getSongClip } from "../api";
+import type { GameSession } from "../session";
 import { Countdown } from "./Countdown";
 import { Leaderboard } from "./ResultsScreen";
 
 export function PuzzleScreen({
+	session,
 	snapshot,
 	receivedAt,
 	onAction,
 	busy,
 	disconnected,
 }: {
+	session?: GameSession;
 	snapshot: GameSnapshot;
 	receivedAt: number;
 	onAction: (action: PuzzleAction) => Promise<boolean>;
@@ -62,6 +66,7 @@ export function PuzzleScreen({
 					</p>
 					{view.puzzle ? (
 						<GuessPuzzle
+							session={session}
 							key={`${view.round.id}:${view.puzzle.id}`}
 							puzzle={view.puzzle}
 							options={view.options}
@@ -205,6 +210,7 @@ function normalize(value: string) {
 		.trim();
 }
 function GuessPuzzle({
+	session,
 	puzzle,
 	options,
 	roundId,
@@ -212,6 +218,7 @@ function GuessPuzzle({
 	disabled,
 	onAction,
 }: {
+	session?: GameSession;
 	puzzle: NonNullable<PuzzleView["puzzle"]>;
 	options: PuzzleView["options"];
 	roundId: string;
@@ -242,7 +249,14 @@ function GuessPuzzle({
 					alt="Partially revealed mystery animal"
 				/>
 			) : null}
-			{format === "MUSIC" && puzzle.media ? (
+			{format === "MUSIC" && puzzle.media?.startsWith("song-clip:") ? (
+				<SongClip
+					key={`${puzzle.id}:${puzzle.media}`}
+					session={session}
+					puzzleId={puzzle.id}
+					seconds={puzzle.media.slice(10)}
+				/>
+			) : format === "MUSIC" && puzzle.media ? (
 				<audio
 					key={puzzle.media}
 					controls
@@ -367,6 +381,74 @@ function GuessPuzzle({
 						))}
 					</ol>
 				</section>
+			) : null}
+		</div>
+	);
+}
+
+function SongClip({
+	session,
+	puzzleId,
+	seconds,
+}: {
+	session?: GameSession;
+	puzzleId: string;
+	seconds: string;
+}) {
+	const [media, setMedia] = useState<string | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [retry, setRetry] = useState(0);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Retry explicitly reloads the clip.
+	useEffect(() => {
+		let active = true;
+		setMedia(null);
+		setError(null);
+		if (session)
+			void getSongClip(session, puzzleId)
+				.then((clip) => {
+					if (active) setMedia(clip);
+				})
+				.catch((reason: unknown) => {
+					if (active)
+						setError(
+							reason instanceof Error
+								? reason.message
+								: "Song clip unavailable.",
+						);
+				});
+		return () => {
+			active = false;
+		};
+	}, [session, puzzleId, retry]);
+	return (
+		<div>
+			<p>{seconds}-second clip · Preview supplied by Deezer</p>
+			{media ? (
+				<audio
+					controls
+					preload="metadata"
+					src={media}
+					onError={() =>
+						setError("Cannot play this clip. Retry or skip this puzzle.")
+					}
+				>
+					<track kind="captions" />
+					Your browser cannot play this clip.
+				</audio>
+			) : !error ? (
+				<p role="status">Loading song clip…</p>
+			) : null}
+			{error ? (
+				<>
+					<p role="alert">{error}</p>
+					<button
+						type="button"
+						className="quiet-button"
+						onClick={() => setRetry(retry + 1)}
+					>
+						Retry song clip
+					</button>
+				</>
 			) : null}
 		</div>
 	);

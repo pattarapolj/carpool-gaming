@@ -11,6 +11,7 @@ type Entry = {
 	attributes?: Record<string, string[]>;
 	icon?: number;
 	notes?: number[];
+	trackId?: number;
 };
 export type Puzzle = {
 	id: string;
@@ -18,6 +19,7 @@ export type Puzzle = {
 	format: PuzzleFormat;
 	answerId: string;
 	prompt: string;
+	legacy?: boolean;
 };
 const characters: Entry[] = [
 	// shortcut: Array positions are persistent IDs; append entries, or migrate IDs before reordering.
@@ -70,7 +72,7 @@ const animals: Entry[] = [
 	icon: i,
 }));
 // Original synthesized arrangements, no recordings or external media requests.
-const songs: Entry[] = [
+const legacySongs: Entry[] = [
 	{
 		id: "song-0",
 		name: "Twinkle Twinkle Little Star",
@@ -134,10 +136,37 @@ const songs: Entry[] = [
 		notes: [60, 65, 69, 65, 69, 67, 65, 62, 60, 60, 65, 69, 65, 67],
 	},
 ];
+const songs: Entry[] = [
+	[13141170, "I Want It That Way", "Backstreet Boys"],
+	[540175, "...Baby One More Time", "Britney Spears"],
+	[13791930, "Smells Like Teen Spirit", "Nirvana"],
+	[14552280, "My Heart Will Go On", "Céline Dion"],
+	[3133738, "Wannabe", "Spice Girls"],
+	[136334560, "Losing My Religion", "R.E.M."],
+	[138547415, "Creep", "Radiohead"],
+	[1115044, "Barbie Girl", "Aqua"],
+	[13704591, "Livin' la Vida Loca", "Ricky Martin"],
+	[7675403, "I Will Always Love You", "Whitney Houston"],
+	[1075781, "No Scrubs", "TLC"],
+	[992131, "Torn", "Natalie Imbruglia"],
+	[952788, "Zombie", "The Cranberries"],
+	[730428, "Kiss from a Rose", "Seal"],
+	[434625962, "Mambo No. 5", "Lou Bega"],
+].map(([trackId, title, artist], i) => ({
+	// IDs are opaque and persistent; track IDs stay on the server.
+	id: `hit-${i}`,
+	trackId: Number(trackId),
+	name: `${title} — ${artist}`,
+	aliases: [
+		String(title),
+		String(artist),
+		String(title).replace(/[^\p{L}\p{N} ]/gu, ""),
+	],
+}));
 export const entries: Record<string, Entry[]> = {
 	naruto: characters,
 	animals,
-	melodies: songs,
+	melodies: [...songs, ...legacySongs],
 };
 const animalPrompts = [
 	"Which animal purrs and retracts its claws?",
@@ -175,12 +204,15 @@ export const catalog: Puzzle[] = [
 			prompt: animalPrompts[i],
 		},
 	]),
-	...songs.map((e) => ({
+	...[...songs, ...legacySongs].map((e) => ({
 		id: `music-${e.id}`,
 		theme: "melodies",
 		format: "MUSIC" as const,
 		answerId: e.id,
-		prompt: "Name this melody. Wrong guesses unlock a longer clip.",
+		legacy: Boolean(e.notes),
+		prompt: e.notes
+			? "Name this melody. Wrong guesses unlock a longer clip."
+			: "Name this ’90s song. Wrong guesses unlock 2, 4, 8, then 15 seconds of the same recording.",
 	})),
 ];
 export function feedback(
@@ -220,6 +252,8 @@ export function clueMedia(puzzle: Puzzle, mistakes: number) {
 		return animalPng(target.icon, mistakes);
 	if (puzzle.format === "MUSIC" && target?.notes)
 		return melodyWav(target.notes, mistakes);
+	if (puzzle.format === "MUSIC" && target?.trackId)
+		return `song-clip:${[2, 4, 8, 15][Math.min(3, mistakes)]}`;
 	return null;
 }
 

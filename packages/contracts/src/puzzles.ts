@@ -10,14 +10,14 @@ export type PuzzleFormat = z.infer<typeof PuzzleFormatSchema>;
 export const PUZZLE_FORMATS: Record<PuzzleFormat, string> = {
 	CHARACTER: "Character detective",
 	PICTURE: "Picture reveal",
-	MUSIC: "Guess the melody",
+	MUSIC: "Guess the Song",
 	TRIVIA: "Trivia",
 };
 export const PuzzleThemeSchema = z.enum(["naruto", "animals", "melodies"]);
 export const PUZZLE_PACKS = [
 	{ id: "naruto", name: "Naruto", formats: ["CHARACTER"] },
 	{ id: "animals", name: "Animals", formats: ["PICTURE", "TRIVIA"] },
-	{ id: "melodies", name: "Familiar melodies", formats: ["MUSIC"] },
+	{ id: "melodies", name: "International ’90s songs", formats: ["MUSIC"] },
 ] as const;
 export const PuzzleSetupSchema = z
 	.object({ theme: PuzzleThemeSchema, format: PuzzleFormatSchema })

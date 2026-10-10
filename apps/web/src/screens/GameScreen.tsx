@@ -175,6 +175,7 @@ export function GameScreen({
 					) : null}
 					{view.puzzles && !hasLeft ? (
 						<PuzzleScreen
+							session={session}
 							snapshot={view}
 							receivedAt={receivedAt}
 							onAction={playPuzzle}
