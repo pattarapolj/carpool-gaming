@@ -1,5 +1,33 @@
 import { expect, it } from "vitest";
-import { CreateGameSchema, PuzzleActionSchema } from "../src/index";
+import {
+	CreateGameSchema,
+	PuzzleActionSchema,
+	SongClipRequestSchema,
+	SongClipResponseSchema,
+} from "../src/index";
+
+it("accepts only a puzzle ID for song clips and only unlocked WAV audio in responses", () => {
+	expect(SongClipRequestSchema.safeParse({ puzzleId: "round/0" }).success).toBe(
+		true,
+	);
+	for (const request of [
+		{ puzzleId: "" },
+		{ puzzleId: "x".repeat(81) },
+		{ puzzleId: "round/0", seconds: 15 },
+	]) {
+		expect(SongClipRequestSchema.safeParse(request).success).toBe(false);
+	}
+	const media = "data:audio/wav;base64,UklGRg==";
+	expect(SongClipResponseSchema.safeParse({ media }).success).toBe(true);
+	expect(
+		SongClipResponseSchema.safeParse({ media, trackId: 13141170 }).success,
+	).toBe(false);
+	expect(
+		SongClipResponseSchema.safeParse({
+			media: "https://provider.example/preview.mp3",
+		}).success,
+	).toBe(false);
+});
 
 it.each([
 	"taylor-swift",

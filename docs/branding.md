@@ -2,9 +2,9 @@
 
 The approved B mark pairs two facing conversational forms around an open channel. The Midnight Electric identity uses pale lime (`#D4F574`) on charcoal (`#171B24`). Reversed artwork uses charcoal on lime. Preserve the existing mark and outlined wordmark proportions.
 
-The web header uses the outlined [horizontal logo](../apps/web/public/brand/horizontal.svg), with its canvas trimmed to remove excess header padding. [Stacked](../apps/web/public/brand/stacked.svg), [wordmark](../apps/web/public/brand/wordmark.svg), [symbol](../apps/web/public/brand/symbol.svg) and reversed SVGs are available in `apps/web/public/brand/`. The header's home link supplies the accessible name; its decorative image has empty alt text.
+The web header uses the outlined [horizontal logo](../apps/web/public/brand/horizontal.svg), with its canvas trimmed to remove excess header padding. [Stacked](../apps/web/public/brand/stacked.svg), [wordmark](../apps/web/public/brand/wordmark.svg), [symbol](../apps/web/public/brand/symbol.svg) and reversed SVGs are available in `apps/web/public/brand/`. The static header image has alt text `Carpool Quiz League`; completed games provide an explicit Return home action.
 
-Keep clear space equal to the symbol's central channel (32 units on its 256-unit canvas). Preserve proportions, colours and the gap between the two forms. Use the symbol for small layouts; the horizontal header is 190 CSS pixels wide. The favicon has a wider channel for 16–24 px use. Avoid stretching, shadows, gradients and busy backgrounds.
+Keep clear space equal to the symbol's central channel (32 units on its 256-unit canvas). Preserve proportions, colours and the gap between the two forms. Use the symbol for small layouts; the horizontal header is 170 CSS pixels wide. The favicon has a wider channel for 16–24 px use. Avoid stretching, shadows, gradients and busy backgrounds.
 
 The wordmark uses Segoe UI Bold and Semibold converted to vector outlines. No font files or live logo text are shipped. Microsoft's [font FAQ](https://learn.microsoft.com/en-us/typography/fonts/font-faq) describes permitted logo/graphic output and the separate restrictions on font-file redistribution.
 

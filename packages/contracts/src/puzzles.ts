@@ -48,6 +48,12 @@ export const PuzzleSetupSchema = z
 export type PuzzleSetup = z.infer<typeof PuzzleSetupSchema>;
 const RoundIdSchema = z.string().uuid();
 const PuzzleIdSchema = z.string().min(1).max(80);
+export const SongClipRequestSchema = z
+	.object({ puzzleId: PuzzleIdSchema })
+	.strict();
+export const SongClipResponseSchema = z
+	.object({ media: z.string().startsWith("data:audio/wav;base64,") })
+	.strict();
 export const PuzzleActionSchema = z.discriminatedUnion("kind", [
 	z
 		.object({

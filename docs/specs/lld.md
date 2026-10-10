@@ -2,6 +2,10 @@
 
 **Behavior amendment:** [Two-phone gameplay (2026-10-09)](../delivery/two-phone-gameplay.md) supersedes this document's spectator-host and fixed-wait rules.
 
+**Song and puzzle implementation amendment (2026-10-10):** Shared puzzle schemas in `packages/contracts/src/puzzles.ts` own the accepted action, setup and clip shapes described in [contracts](contracts.md). `puzzle-service.ts` validates the car's current puzzle and derives its unlocked duration under the game lock, releasing that lock before network access and decoding. The server-only catalog contains 90 curated recordings across six music themes; legacy synthesized puzzle IDs remain resolvable but are excluded from new rounds. Additive migrations extend both opening and subsequent theme constraints.
+
+`song-preview.ts` fetches pinned Deezer track IDs, permits HTTPS previews only from `cdnt-preview.dzcdn.net`, rejects redirects and bounds downloads. FFmpeg decodes at most 15 seconds to mono 16 kHz PCM; responses contain a metadata-free WAV prefix. An hour-long in-memory cache holds about 43 MB for this finite catalog; failures evict the failed entry and the browser offers Retry/Skip. FFmpeg is included in Docker and installed in CI; source-based API runs also require it on PATH. The browser requests only the current private clip and cancels playback when the puzzle changes.
+
 **Status:** Detailed design with settled MVP behavior and implemented module responsibilities.
 **Depends on:** [High-level design](design.md) and [contracts](contracts.md).  
 **Implemented by:** [Implementation plan](../delivery/implementation-plan.md)
