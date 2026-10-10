@@ -279,7 +279,6 @@ it("decodes and replays progressively longer music clues in Chromium", async () 
 		await page
 			.getByRole("button", { name: "Create game", exact: true })
 			.click();
-		await page.getByLabel("Play solo practice").check();
 		await page
 			.getByRole("button", { name: "Start practice game", exact: true })
 			.click();

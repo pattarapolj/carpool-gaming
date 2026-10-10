@@ -4,7 +4,10 @@ import { formatAnswer } from "./QuestionScreen";
 
 export function Leaderboard({ snapshot }: { snapshot: GameSnapshot }) {
 	return (
-		<section className="roster-card" aria-labelledby="leaderboard-heading">
+		<section
+			className="roster-card leaderboard"
+			aria-labelledby="leaderboard-heading"
+		>
 			<h2 id="leaderboard-heading">
 				{snapshot.game.status === "COMPLETE"
 					? "Final leaderboard"
