@@ -32,6 +32,7 @@ it("accepts only a puzzle ID for song clips and only unlocked WAV audio in respo
 it.each([
 	"taylor-swift",
 	"ed-sheeran",
+	"adele",
 	"songs-2000s",
 	"songs-2010s",
 	"songs-2020s",
@@ -64,13 +65,28 @@ it("accepts supported opening packs and rejects mismatched formats", () => {
 	expect(
 		CreateGameSchema.safeParse({
 			...game,
-			puzzleSetup: { theme: "naruto", format: "CHARACTER" },
+			puzzleSetup: { theme: "animals", format: "PICTURE" },
 		}).success,
 	).toBe(true);
 	expect(
 		CreateGameSchema.safeParse({
 			...game,
 			puzzleSetup: { theme: "naruto", format: "MUSIC" },
+		}).success,
+	).toBe(false);
+	expect(
+		CreateGameSchema.safeParse({
+			...game,
+			puzzleSetup: { theme: "naruto", format: "CHARACTER" },
+		}).success,
+	).toBe(false);
+});
+it("rejects Naruto as a subsequent theme", () => {
+	expect(
+		PuzzleActionSchema.safeParse({
+			kind: "theme",
+			roundId: "a6775a41-50ab-4d61-b1fa-f9f07a28c62b",
+			theme: "naruto",
 		}).success,
 	).toBe(false);
 });

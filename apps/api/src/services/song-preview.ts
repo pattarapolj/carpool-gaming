@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { entries } from "./puzzle-catalog";
 
-// shortcut: PCM cache holds about 43 MB for 90 curated tracks; add eviction before substantially growing the catalog.
+// Keep decoded audio below about 43 MB as the catalog grows.
 const cache = new Map<number, { expires: number; pcm: Promise<Buffer> }>();
 
 export async function songPreview(trackId: number, seconds: number) {
@@ -14,8 +14,12 @@ export async function songPreview(trackId: number, seconds: number) {
 		throw new Error("Invalid song clue");
 	let cached = cache.get(trackId);
 	if (!cached || cached.expires <= Date.now()) {
+		if (cache.size >= 90) {
+			const oldest = cache.keys().next().value;
+			if (oldest !== undefined) cache.delete(oldest);
+		}
 		const pcm = loadPreview(trackId).catch((error) => {
-			cache.delete(trackId);
+			if (cache.get(trackId)?.pcm === pcm) cache.delete(trackId);
 			throw error;
 		});
 		cached = { expires: Date.now() + 3600000, pcm };

@@ -29,8 +29,8 @@ export default function App() {
 	const [gameName, setGameName] = useState("");
 	const [playStyle, setPlayStyle] = useState("trivia");
 	const [puzzleSetup, setPuzzleSetup] = useState<PuzzleSetup>({
-		theme: "naruto",
-		format: "CHARACTER",
+		theme: "melodies",
+		format: "MUSIC",
 	});
 	const [topics, setTopics] = useState<QuestionTopicId[]>([
 		...QuestionTopicIds,

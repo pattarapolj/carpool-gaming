@@ -1,6 +1,9 @@
+import { EventEmitter } from "node:events";
+import { PassThrough } from "node:stream";
 import { afterEach, expect, it, vi } from "vitest";
+import { songPacks } from "../src/services/song-packs";
 import { songPreview } from "../src/services/song-preview";
-import { songRecording } from "./fixtures/song-recording";
+import { previewFixture, songRecording } from "./fixtures/song-recording";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -45,4 +48,31 @@ it("rejects provider URLs outside Deezer's preview host and permits a retry", as
 it("rejects arbitrary tracks and unsupported clip durations", async () => {
 	await expect(songPreview(1, 2)).rejects.toThrow("Invalid song clue");
 	await expect(songPreview(13141170, 30)).rejects.toThrow("Invalid song clue");
+});
+
+it("evicts old previews as the expanded catalog is played", async () => {
+	vi.resetModules();
+	vi.doMock("node:child_process", () => ({
+		spawn: () => {
+			const decoder = Object.assign(new EventEmitter(), {
+				stdin: new PassThrough(),
+				stdout: new PassThrough(),
+				stderr: new PassThrough(),
+			});
+			decoder.stdin.resume();
+			decoder.stdin.on("finish", () => {
+				decoder.stdout.end(Buffer.alloc(480000));
+				decoder.emit("close", 0);
+			});
+			return decoder;
+		},
+	}));
+	const { songPreview: preview } = await import("../src/services/song-preview");
+	const fetchPreview = vi.fn(previewFixture);
+	vi.stubGlobal("fetch", fetchPreview);
+	const tracks = Object.values(songPacks).flat().slice(0, 91);
+	for (const [id] of tracks) await preview(id, 2);
+	const calls = fetchPreview.mock.calls.length;
+	await preview(tracks[0][0], 2);
+	expect(fetchPreview.mock.calls.length).toBe(calls + 2);
 });
