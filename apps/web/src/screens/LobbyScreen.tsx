@@ -34,6 +34,7 @@ export function LobbyScreen({
 	return (
 		<section className="lobby-layout">
 			<div className="lobby-heading">
+				<p className="round-meta">YOUR CONVOY · GAME LOBBY</p>
 				<h1>{snapshot.game.name}</h1>
 				<p className="lobby-subtitle">
 					{waiting

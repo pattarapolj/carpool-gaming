@@ -884,6 +884,9 @@ it("restores a Science-only selection and plays two phones only from that topic"
 		await host.page
 			.getByRole("button", { name: "Start game", exact: true })
 			.click();
+		await expect
+			.poll(async () => (await snapshot(host.page)).round?.status)
+			.toBe("OPEN");
 		const open = await snapshot(host.page);
 		assert(open.round?.status === "OPEN");
 		const question = (

@@ -71,7 +71,8 @@ export function ResultsScreen({
 	return (
 		<>
 			{complete ? (
-				<section className="game-card">
+				<section className="game-card trip-complete">
+					<p className="round-meta">ONE TRIP. PLENTY OF GOOD MEMORIES.</p>
 					<h2>Thanks for playing together.</h2>
 					<p>
 						{snapshot.game.completionReason
