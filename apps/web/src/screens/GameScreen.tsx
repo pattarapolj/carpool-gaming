@@ -152,6 +152,11 @@ export function GameScreen({
 					<div className="lobby-heading">
 						<p className="round-meta">YOUR TRIP · {view.game.joinCode}</p>
 						<h1>{view.game.name}</h1>
+						{view.callerTeam ? (
+							<p className="trip-score">
+								{view.callerTeam.name} · {view.callerTeam.score} pts
+							</p>
+						) : null}
 					</div>
 					{hasLeft ? (
 						<section className="wait-panel" role="status">
@@ -189,11 +194,14 @@ export function GameScreen({
 								onRefresh={refresh}
 							/>
 							{view.previousRound ? (
-								<ResultsScreen
-									snapshot={{ ...view, round: view.previousRound }}
-									receivedAt={receivedAt}
-									waiting={false}
-								/>
+								<details className="play-disclosure previous-results">
+									<summary>Previous round & leaderboard</summary>
+									<ResultsScreen
+										snapshot={{ ...view, round: view.previousRound }}
+										receivedAt={receivedAt}
+										waiting={false}
+									/>
+								</details>
 							) : null}
 						</>
 					) : (

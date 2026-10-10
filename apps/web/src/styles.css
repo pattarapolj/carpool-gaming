@@ -426,7 +426,7 @@ h2 {
 	font-weight: 600;
 }
 
-.topic-disclosure[open] summary {
+.topic-disclosure:where([open]) summary {
 	margin-bottom: 8px;
 }
 
@@ -954,8 +954,8 @@ h2 {
 
 .gameplay-layout {
 	display: grid;
-	max-width: 840px;
-	gap: 24px;
+	max-width: 1040px;
+	gap: 20px;
 }
 
 :where(.gameplay-layout) .lobby-heading {
@@ -1113,7 +1113,7 @@ h2 {
 }
 
 .gameplay-layout + .lifecycle-controls {
-	max-width: 840px;
+	max-width: 1040px;
 }
 
 .reconnect-panel {
@@ -1155,7 +1155,7 @@ h2 {
 	flex-wrap: wrap;
 }
 
-.game-card .wait-panel h3 {
+:where(.game-card .wait-panel) h3 {
 	margin-top: 0;
 }
 
@@ -1425,9 +1425,39 @@ button:disabled {
 }
 
 .guess-puzzle {
-	margin-top: 24px;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+	align-items: start;
+	gap: 24px 40px;
+	margin-top: 20px;
 	border-top: 1px solid var(--line);
 	padding-top: 24px;
+}
+
+.puzzle-clue,
+.puzzle-answer-form {
+	min-width: 0;
+}
+
+.puzzle-clue > h3 {
+	color: var(--accent);
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.puzzle-clue > p {
+	font-size: clamp(20px, 2.4vw, 28px);
+	text-wrap: pretty;
+}
+
+.guess-puzzle > section {
+	grid-column: 1 / -1;
+}
+
+.puzzle-instructions {
+	margin: 0;
+	color: var(--ink-muted);
+	font-size: 13px;
 }
 
 .puzzle-round p {
@@ -1446,7 +1476,7 @@ button:disabled {
 .puzzle-score {
 	border-left: 3px solid var(--accent);
 	background: var(--field);
-	padding: 14px 18px;
+	padding: 10px 14px;
 	font-weight: 600;
 	font-variant-numeric: tabular-nums;
 }
@@ -1505,10 +1535,18 @@ button:disabled {
 	box-shadow: none;
 }
 .guess-history {
-	padding-left: 22px;
+	list-style: none;
+	padding: 0;
 }
 .guess-history > li {
-	margin: 16px 0;
+	border-top: 1px solid var(--line);
+}
+
+.guess-history summary {
+	min-height: 48px;
+	padding: 14px 0;
+	cursor: pointer;
+	font-size: 14px;
 }
 .attribute-feedback {
 	display: flex;
@@ -1564,8 +1602,9 @@ button:disabled {
 
 	.round-heading {
 		align-items: flex-start;
-		flex-direction: column;
-		margin-bottom: 20px;
+		flex-direction: row;
+		gap: 10px;
+		margin-bottom: 16px;
 	}
 
 	.team-row {
@@ -1579,5 +1618,222 @@ button:disabled {
 
 	.puzzle-round .action-row > button {
 		flex: 1 1 120px;
+	}
+}
+
+.game-frame .topbar {
+	border-color: rgb(188 197 213 / 14%);
+}
+
+.gameplay-layout > .lobby-heading {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 4px 20px;
+}
+
+.gameplay-layout > .lobby-heading .round-meta {
+	grid-column: 1 / -1;
+	margin: 0;
+}
+
+.gameplay-layout > .lobby-heading h1 {
+	margin: 0;
+	font-size: clamp(26px, 3vw, 38px);
+}
+
+.trip-score {
+	margin: 0;
+	color: var(--accent);
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+}
+
+.play-disclosure {
+	min-width: 0;
+	margin-top: 16px;
+	border-top: 1px solid var(--line);
+}
+
+.play-disclosure > summary {
+	min-height: 48px;
+	padding: 15px 0;
+	color: var(--ink-muted);
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.play-disclosure[open] > summary {
+	color: var(--accent);
+}
+
+.play-disclosure .skipped-puzzles,
+.play-disclosure .leaderboard {
+	margin-top: 0;
+	border-top: 0;
+}
+
+.previous-results {
+	margin: 0;
+}
+
+.previous-results > .game-card {
+	margin-bottom: 16px;
+}
+
+.play-actions > .primary-button {
+	width: 100%;
+	justify-content: center;
+}
+
+.play-actions.action-row > .primary-button {
+	width: auto;
+	flex: 1;
+}
+
+button:active:not(:disabled) {
+	transform: translateY(1px);
+}
+
+@media (max-width: 760px) {
+	.game-frame .brand img {
+		width: 138px;
+	}
+
+	.game-frame .topbar {
+		padding-bottom: 10px;
+	}
+
+	.welcome-layout {
+		gap: 24px;
+		padding-top: 18px;
+	}
+
+	.access-card {
+		order: -1;
+	}
+
+	.welcome-copy {
+		padding: 12px 4px;
+	}
+
+	.welcome-copy h1 {
+		font-size: clamp(32px, 8vw, 44px);
+	}
+
+	.welcome-eyebrow {
+		margin-bottom: 14px;
+	}
+
+	.access-form h2 {
+		margin-bottom: 20px;
+		font-size: 28px;
+	}
+
+	.mode-switch {
+		margin-bottom: 22px;
+	}
+
+	.access-form input,
+	.access-form select {
+		min-height: 48px;
+		margin-bottom: 14px;
+	}
+
+	.lobby-layout {
+		padding: 24px 0 12px;
+	}
+
+	.gameplay-layout {
+		gap: 14px;
+		padding-top: 18px;
+	}
+
+	.guess-puzzle {
+		grid-template-columns: 1fr;
+		gap: 16px;
+		margin-top: 16px;
+		padding-top: 16px;
+	}
+
+	.puzzle-clue > p {
+		margin-bottom: 0;
+		font-size: 20px;
+		line-height: 1.4;
+	}
+
+	.puzzle-image {
+		width: min(100%, 220px, 28dvh);
+		margin: 12px auto 0;
+	}
+
+	.play-actions {
+		position: sticky;
+		bottom: 0;
+		z-index: 2;
+		padding: 10px 0 max(10px, env(safe-area-inset-bottom));
+		background: var(--card);
+	}
+
+	.puzzle-round,
+	.game-card {
+		padding: 18px;
+		border-radius: 18px;
+	}
+
+	.gameplay-layout > .lobby-heading {
+		gap: 6px 12px;
+	}
+
+	.trip-score {
+		max-width: 140px;
+		text-align: right;
+		line-height: 1.5;
+	}
+
+	.puzzle-round h2,
+	.game-card h2 {
+		font-size: 24px;
+		line-height: 1.25;
+	}
+
+	.puzzle-round .round-heading h2 {
+		margin-bottom: 0;
+	}
+
+	.puzzle-instructions {
+		font-size: 12px;
+	}
+
+	.puzzle-score {
+		margin-bottom: 10px;
+	}
+
+	.round-heading > div {
+		flex: 1 1 140px;
+	}
+
+	.countdown {
+		padding: 8px 10px;
+		font-size: 12px;
+	}
+
+	.round-meta {
+		font-size: 11px;
+	}
+
+	.answer-options {
+		gap: 8px;
+		margin: 16px 0 8px;
+	}
+
+	.answer-choice {
+		padding: 12px;
+	}
+
+	.driver-note {
+		margin-top: 12px;
+		padding-top: 12px;
 	}
 }

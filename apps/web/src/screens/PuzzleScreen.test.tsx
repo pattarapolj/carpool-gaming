@@ -38,6 +38,30 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 });
+it("keeps supporting lists collapsed and accessible during play", () => {
+	show();
+	for (const label of ["Leaderboard", "Skipped puzzles (1)"]) {
+		const summary = screen.getByText(label, { selector: "summary" });
+		expect(summary.closest("details")?.open).toBe(false);
+		fireEvent.click(summary);
+		expect(summary.closest("details")?.open).toBe(true);
+	}
+});
+it("opens the latest guess feedback while keeping older feedback expandable", () => {
+	if (!view.puzzle) throw new Error("Missing fixture puzzle");
+	show({
+		...view,
+		puzzle: {
+			...view.puzzle,
+			guesses: [
+				{ name: "Older guess", correct: false, feedback: [] },
+				{ name: "Latest guess", correct: false, feedback: [] },
+			],
+		},
+	});
+	expect(screen.getByText("Older guess").closest("details")?.open).toBe(false);
+	expect(screen.getByText("Latest guess").closest("details")?.open).toBe(true);
+});
 function show(puzzles = view, act = vi.fn(async () => true)) {
 	const snapshot = { ...gameSnapshot(), puzzles };
 	render(
@@ -153,6 +177,9 @@ it("uses canonical suggestions instead of submitting misspelled text", async () 
 });
 it("offers skipped puzzles and sends a revisit without granting clues", () => {
 	const act = show();
+	fireEvent.click(
+		screen.getByText("Skipped puzzles (1)", { selector: "summary" }),
+	);
 	fireEvent.click(screen.getByRole("button", { name: "Revisit puzzle 2" }));
 	expect(act).toHaveBeenCalledWith({
 		kind: "revisit",

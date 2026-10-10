@@ -67,7 +67,9 @@ export function PuzzleScreen({
 					<p className="puzzle-score" role="status">
 						Your car solved {view.solved} of {view.round.total} puzzles
 					</p>
-					<p>One point per solve. Keep guessing until time runs out.</p>
+					<p className="puzzle-instructions">
+						One point per solve. Keep guessing until time runs out.
+					</p>
 					{view.puzzle ? (
 						<GuessPuzzle
 							session={session}
@@ -90,29 +92,36 @@ export function PuzzleScreen({
 						<p role="status">Time is up. Waiting for the server's results…</p>
 					) : null}
 					{skipped.length ? (
-						<fieldset className="skipped-puzzles">
-							<legend>Skipped puzzles ({skipped.length})</legend>
-							<div className="action-row">
-								{skipped.map((p) => (
-									<button
-										className="quiet-button"
-										type="button"
-										key={p.id}
-										disabled={disabled || expired}
-										onClick={() =>
-											void onAction({
-												kind: "revisit",
-												roundId: view.round.id,
-												puzzleId: p.id,
-											})
-										}
-									>
-										Revisit puzzle {p.number}
-									</button>
-								))}
-							</div>
-							<p>Guesses and clues are saved. Skipping does not reveal more.</p>
-						</fieldset>
+						<details className="play-disclosure">
+							<summary>Skipped puzzles ({skipped.length})</summary>
+							<fieldset className="skipped-puzzles">
+								<legend className="visually-hidden">
+									Choose a puzzle to revisit
+								</legend>
+								<div className="action-row">
+									{skipped.map((p) => (
+										<button
+											className="quiet-button"
+											type="button"
+											key={p.id}
+											disabled={disabled || expired}
+											onClick={() =>
+												void onAction({
+													kind: "revisit",
+													roundId: view.round.id,
+													puzzleId: p.id,
+												})
+											}
+										>
+											Revisit puzzle {p.number}
+										</button>
+									))}
+								</div>
+								<p>
+									Guesses and clues are saved. Skipping does not reveal more.
+								</p>
+							</fieldset>
+						</details>
 					) : null}
 				</>
 			) : (
@@ -205,7 +214,14 @@ export function PuzzleScreen({
 					) : null}
 				</>
 			)}
-			<Leaderboard snapshot={snapshot} />
+			{view.round.status === "OPEN" && !complete ? (
+				<details className="play-disclosure">
+					<summary>Leaderboard</summary>
+					<Leaderboard snapshot={snapshot} />
+				</details>
+			) : (
+				<Leaderboard snapshot={snapshot} />
+			)}
 		</section>
 	);
 }
@@ -247,37 +263,39 @@ function GuessPuzzle({
 	);
 	return (
 		<div className="guess-puzzle">
-			<h3>Puzzle {puzzle.number}</h3>
-			<p>{puzzle.prompt}</p>
-			{format === "PICTURE" && puzzle.media ? (
-				<img
-					className="puzzle-image"
-					src={puzzle.media}
-					width="320"
-					height="320"
-					alt="Partially revealed mystery animal"
-				/>
-			) : null}
-			{format === "MUSIC" && puzzle.media?.startsWith("song-clip:") ? (
-				<SongClip
-					key={`${puzzle.id}:${puzzle.media}`}
-					session={session}
-					puzzleId={puzzle.id}
-					seconds={puzzle.media.slice(10)}
-				/>
-			) : format === "MUSIC" && puzzle.media ? (
-				<audio
-					key={puzzle.media}
-					controls
-					preload="metadata"
-					src={puzzle.media}
-				>
-					<track kind="captions" />
-					Your browser cannot play this clip.
-				</audio>
-			) : null}
+			<div className="puzzle-clue">
+				<h3>Puzzle {puzzle.number}</h3>
+				<p>{puzzle.prompt}</p>
+				{format === "PICTURE" && puzzle.media ? (
+					<img
+						className="puzzle-image"
+						src={puzzle.media}
+						width="320"
+						height="320"
+						alt="Partially revealed mystery animal"
+					/>
+				) : null}
+				{format === "MUSIC" && puzzle.media?.startsWith("song-clip:") ? (
+					<SongClip
+						key={`${puzzle.id}:${puzzle.media}`}
+						session={session}
+						puzzleId={puzzle.id}
+						seconds={puzzle.media.slice(10)}
+					/>
+				) : format === "MUSIC" && puzzle.media ? (
+					<audio
+						key={puzzle.media}
+						controls
+						preload="metadata"
+						src={puzzle.media}
+					>
+						<track kind="captions" />
+						Your browser cannot play this clip.
+					</audio>
+				) : null}
+			</div>
 			<form
-				className="access-form"
+				className="access-form puzzle-answer-form"
 				onSubmit={(event) => {
 					event.preventDefault();
 					if (answerId && !disabled && available.some((o) => o.id === answerId))
@@ -341,7 +359,7 @@ function GuessPuzzle({
 						) : null}
 					</fieldset>
 				) : null}
-				<div className="action-row">
+				<div className="action-row play-actions">
 					<button
 						type="submit"
 						className="primary-button"
@@ -365,25 +383,29 @@ function GuessPuzzle({
 				<section aria-label="Your guesses" aria-live="polite">
 					<h4>Your guesses</h4>
 					<ol className="guess-history">
-						{puzzle.guesses.map((g) => (
+						{puzzle.guesses.map((g, index) => (
 							<li key={g.name}>
-								<strong>{g.name}</strong>
-								<span>{g.correct ? " — Correct" : " — Try again"}</span>
-								<ul className="attribute-feedback">
-									{g.feedback.map((f) => (
-										<li
-											className={`feedback-${f.match.toLowerCase()}`}
-											key={f.attribute}
-										>
-											{f.attribute}: {f.value} —{" "}
-											{f.match === "MATCH"
-												? "Match"
-												: f.match === "PARTIAL"
-													? "Partial match"
-													: "Mismatch"}
-										</li>
-									))}
-								</ul>
+								<details open={index === puzzle.guesses.length - 1}>
+									<summary>
+										<strong>{g.name}</strong>
+										<span>{g.correct ? " — Correct" : " — Try again"}</span>
+									</summary>
+									<ul className="attribute-feedback">
+										{g.feedback.map((f) => (
+											<li
+												className={`feedback-${f.match.toLowerCase()}`}
+												key={f.attribute}
+											>
+												{f.attribute}: {f.value} —{" "}
+												{f.match === "MATCH"
+													? "Match"
+													: f.match === "PARTIAL"
+														? "Partial match"
+														: "Mismatch"}
+											</li>
+										))}
+									</ul>
+								</details>
 							</li>
 						))}
 					</ol>

@@ -144,14 +144,16 @@ export function QuestionScreen({
 							{error}
 						</p>
 					) : null}
-					<button
-						className="primary-button"
-						aria-busy={busy}
-						disabled={busy || value === null}
-						type="submit"
-					>
-						{busy ? "Confirming…" : "Confirm team answer"}
-					</button>
+					<div className="play-actions">
+						<button
+							className="primary-button"
+							aria-busy={busy}
+							disabled={busy || value === null}
+							type="submit"
+						>
+							{busy ? "Confirming…" : "Confirm team answer"}
+						</button>
+					</div>
 				</form>
 			) : (
 				<p className="sync-note">
