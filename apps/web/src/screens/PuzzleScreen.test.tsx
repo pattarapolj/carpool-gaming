@@ -72,6 +72,44 @@ it("does not offer a revisit button for the puzzle already being played", () => 
 	show({ ...view, skipped: [{ id: view.puzzle.id, number: 1 }] });
 	expect(screen.queryByRole("button", { name: "Revisit puzzle 1" })).toBeNull();
 });
+
+it("keeps songs by the same artist ambiguous until a title is chosen", () => {
+	show({
+		...view,
+		options: [
+			{
+				id: "taylor-1",
+				name: "Blank Space — Taylor Swift",
+				aliases: ["Blank Space", "Taylor Swift"],
+			},
+			{
+				id: "taylor-2",
+				name: "Cruel Summer — Taylor Swift",
+				aliases: ["Cruel Summer", "Taylor Swift"],
+			},
+		],
+	});
+	fireEvent.change(screen.getByLabelText("Search answers"), {
+		target: { value: "Taylor Swift" },
+	});
+	expect(
+		screen.getByRole("button", { name: "Blank Space — Taylor Swift" }),
+	).toBeTruthy();
+	expect(
+		screen.getByRole("button", { name: "Cruel Summer — Taylor Swift" }),
+	).toBeTruthy();
+	expect(
+		(screen.getByRole("button", { name: "Guess" }) as HTMLButtonElement)
+			.disabled,
+	).toBe(true);
+	fireEvent.click(
+		screen.getByRole("button", { name: "Cruel Summer — Taylor Swift" }),
+	);
+	expect(
+		(screen.getByRole("button", { name: "Guess" }) as HTMLButtonElement)
+			.disabled,
+	).toBe(false);
+});
 it("shows one final score list when a puzzle game completes", () => {
 	render(
 		<PuzzleScreen

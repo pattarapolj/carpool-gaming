@@ -26,6 +26,55 @@ it("requires authentication to load a song clip", async () => {
 	});
 	expect(response.statusCode).toBe(401);
 });
+
+it.each([
+	"taylor-swift",
+	"ed-sheeran",
+	"songs-2000s",
+	"songs-2010s",
+	"songs-2020s",
+])(
+	"plays a real song clip from %s with a theme-specific answer list",
+	async (theme) => {
+		vi.stubGlobal("fetch", previewFixture);
+		const { id, tokens } = await setup(theme, "MUSIC", 1);
+		const p = (await snapshot(id, tokens[0])).puzzles;
+		expect(p.round.total).toBe(15);
+		expect(p.options).toHaveLength(15);
+		const response = await app.inject({
+			method: "POST",
+			url: `/v1/games/${id}/puzzles/clip`,
+			headers: { authorization: `Bearer ${tokens[0]}` },
+			payload: { puzzleId: p.puzzle.id },
+		});
+		expect(response.statusCode).toBe(200);
+		const wav = Buffer.from(response.json().media.split(",")[1], "base64");
+		expect(wav.length).toBe(44 + 2 * 32000);
+		expect(await answerFor(p.round.id, p.puzzle.id)).toMatch(
+			new RegExp(`^${theme}-`),
+		);
+		await tick(storage, () => new Date(p.round.endsAt));
+		expect(
+			(
+				await action(id, tokens[0], {
+					kind: "theme",
+					roundId: p.round.id,
+					theme,
+				})
+			).statusCode,
+		).toBe(200);
+		expect(
+			(
+				await action(id, tokens[0], {
+					kind: "format",
+					roundId: p.round.id,
+					format: "MUSIC",
+				})
+			).statusCode,
+		).toBe(200);
+		expect((await snapshot(id, tokens[0])).puzzles.round.theme).toBe(theme);
+	},
+);
 beforeAll(async () => {
 	db = new PGlite();
 	for (const file of (await readdir(new URL("../migrations/", import.meta.url)))

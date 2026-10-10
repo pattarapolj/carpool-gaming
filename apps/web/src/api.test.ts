@@ -1,9 +1,32 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ApiError, createGame, startGame, submitAnswer } from "./api";
+import {
+	ApiError,
+	createGame,
+	getSongClip,
+	startGame,
+	submitAnswer,
+} from "./api";
 import { session } from "./test/game-fixtures";
 
 describe("lobby API client", () => {
 	afterEach(() => vi.unstubAllGlobals());
+	it("validates the song clip request before sending it", async () => {
+		const fetchMock = vi.fn(async () =>
+			Response.json({ media: "data:audio/wav;base64,UklGRg==" }),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		await expect(getSongClip(session, "")).rejects.toThrow();
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+	it("rejects song clip responses containing provider metadata", async () => {
+		vi.stubGlobal("fetch", async () =>
+			Response.json({
+				media: "data:audio/wav;base64,UklGRg==",
+				trackId: 13141170,
+			}),
+		);
+		await expect(getSongClip(session, "round/0")).rejects.toThrow();
+	});
 	it("preserves duplicate status/code and sends false without a caller-supplied team identity", async () => {
 		const fetchMock = vi.fn(
 			async () =>

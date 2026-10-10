@@ -2,6 +2,8 @@
 
 **Purpose:** Make local verification, installed CI and hosted merge-gate requirements explicit. For commits, collaboration and SDLC, read [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
+**Song release amendment (2026-10-10):** Music rounds now use six 15-song Deezer packs, with shared clip request/response schemas and authenticated server-side clipping. Docker includes FFmpeg and CI installs it; source-based API runs need FFmpeg on PATH and outbound HTTPS to the two hosts in [README](../../README.md). Release verification includes clip authorization/validation, legacy progress compatibility, browser playback and Skip/Revisit journeys, and Retry UI component coverage. Real provider availability and regional restrictions require checking the selected recordings against Deezer; mocked fixtures alone do not establish that availability. See [contracts](../specs/contracts.md) and [LLD](../specs/lld.md) for the current protocol and runtime.
+
 ## 1. Current implementation versus target
 
 As of 2026-10-09, the built PWA, Fastify API and Socket.IO run together as one unprivileged process. Lobby, full snapshots, coordinator, scoring, completion/capacity policy, live synchronization, passenger gameplay and saved topic selection are implemented and reviewed. Journaled migrations upgrade existing databases; pre-journal schemas require explicit verified adoption. The reviewed 325-question bank is seeded idempotently, with 25 questions in each of 13 topics. The [production runbook](production-runbook.md) contains executable installation, adoption, upgrade, backup/restore and recovery commands. The topic-selection PR's current hosted checks passed at `9051ea9`; final review and approval are still needed before merge.

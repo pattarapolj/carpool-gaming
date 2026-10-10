@@ -3,6 +3,7 @@ import type {
 	PuzzleFormat,
 	PuzzleView,
 } from "../../../../packages/contracts/src/puzzles";
+import { songPacks } from "./song-packs";
 
 type Entry = {
 	id: string;
@@ -136,37 +137,22 @@ const legacySongs: Entry[] = [
 		notes: [60, 65, 69, 65, 69, 67, 65, 62, 60, 60, 65, 69, 65, 67],
 	},
 ];
-const songs: Entry[] = [
-	[13141170, "I Want It That Way", "Backstreet Boys"],
-	[540175, "...Baby One More Time", "Britney Spears"],
-	[13791930, "Smells Like Teen Spirit", "Nirvana"],
-	[14552280, "My Heart Will Go On", "Céline Dion"],
-	[3133738, "Wannabe", "Spice Girls"],
-	[136334560, "Losing My Religion", "R.E.M."],
-	[138547415, "Creep", "Radiohead"],
-	[1115044, "Barbie Girl", "Aqua"],
-	[13704591, "Livin' la Vida Loca", "Ricky Martin"],
-	[7675403, "I Will Always Love You", "Whitney Houston"],
-	[1075781, "No Scrubs", "TLC"],
-	[992131, "Torn", "Natalie Imbruglia"],
-	[952788, "Zombie", "The Cranberries"],
-	[730428, "Kiss from a Rose", "Seal"],
-	[434625962, "Mambo No. 5", "Lou Bega"],
-].map(([trackId, title, artist], i) => ({
-	// IDs are opaque and persistent; track IDs stay on the server.
-	id: `hit-${i}`,
-	trackId: Number(trackId),
-	name: `${title} — ${artist}`,
-	aliases: [
-		String(title),
-		String(artist),
-		String(title).replace(/[^\p{L}\p{N} ]/gu, ""),
-	],
-}));
+const musicEntries: Record<string, Entry[]> = Object.fromEntries(
+	Object.entries(songPacks).map(([theme, tracks]) => [
+		theme,
+		tracks.map(([trackId, title, artist], i) => ({
+			id: `${theme === "melodies" ? "hit" : theme}-${i}`,
+			trackId,
+			name: `${title} — ${artist}`,
+			aliases: [title, artist, title.replace(/[^\p{L}\p{N} ]/gu, "")],
+		})),
+	]),
+);
 export const entries: Record<string, Entry[]> = {
 	naruto: characters,
 	animals,
-	melodies: [...songs, ...legacySongs],
+	...musicEntries,
+	melodies: [...musicEntries.melodies, ...legacySongs],
 };
 const animalPrompts = [
 	"Which animal purrs and retracts its claws?",
@@ -204,16 +190,20 @@ export const catalog: Puzzle[] = [
 			prompt: animalPrompts[i],
 		},
 	]),
-	...[...songs, ...legacySongs].map((e) => ({
-		id: `music-${e.id}`,
-		theme: "melodies",
-		format: "MUSIC" as const,
-		answerId: e.id,
-		legacy: Boolean(e.notes),
-		prompt: e.notes
-			? "Name this melody. Wrong guesses unlock a longer clip."
-			: "Name this ’90s song. Wrong guesses unlock 2, 4, 8, then 15 seconds of the same recording.",
-	})),
+	...Object.entries(entries).flatMap(([theme, roster]) =>
+		roster
+			.filter((e) => e.trackId || e.notes)
+			.map((e) => ({
+				id: `music-${e.id}`,
+				theme,
+				format: "MUSIC" as const,
+				answerId: e.id,
+				legacy: Boolean(e.notes),
+				prompt: e.notes
+					? "Name this melody. Wrong guesses unlock a longer clip."
+					: "Name this song. Wrong guesses unlock 2, 4, 8, then 15 seconds of the same recording.",
+			})),
+	),
 ];
 export function feedback(
 	puzzle: Puzzle,

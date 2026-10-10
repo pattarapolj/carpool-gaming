@@ -14,6 +14,8 @@ import {
 	type PuzzleAction,
 	PuzzleActionResponseSchema,
 	PuzzleActionSchema,
+	SongClipRequestSchema,
+	SongClipResponseSchema,
 	type StartedGame,
 	StartGameResponseSchema,
 	StartGameSchema,
@@ -188,26 +190,16 @@ export async function sendPuzzleAction(
 }
 
 export async function getSongClip(session: GameSession, puzzleId: string) {
-	return request(
+	const body = SongClipRequestSchema.parse({ puzzleId });
+	const { media } = await request(
 		`/v1/games/${encodeURIComponent(session.gameId)}/puzzles/clip`,
-		{
-			parse(value: unknown): string {
-				if (
-					typeof value !== "object" ||
-					value === null ||
-					!("media" in value) ||
-					typeof value.media !== "string" ||
-					!value.media.startsWith("data:audio/wav;base64,")
-				)
-					throw new Error("Invalid song clip");
-				return value.media;
-			},
-		},
+		SongClipResponseSchema,
 		{
 			method: "POST",
 			headers: { authorization: `Bearer ${session.token}` },
-			body: JSON.stringify({ puzzleId }),
+			body: JSON.stringify(body),
 			signal: AbortSignal.timeout(15000),
 		},
 	);
+	return media;
 }

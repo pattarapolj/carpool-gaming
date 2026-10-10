@@ -303,13 +303,12 @@ function GuessPuzzle({
 					onChange={(event) => {
 						const value = event.currentTarget.value;
 						setQuery(value);
-						setAnswerId(
-							available.find((o) =>
-								[o.name, ...o.aliases].some(
-									(name) => normalize(name) === normalize(value),
-								),
-							)?.id ?? "",
+						const exact = available.filter((o) =>
+							[o.name, ...o.aliases].some(
+								(name) => normalize(name) === normalize(value),
+							),
 						);
+						setAnswerId(exact.length === 1 ? exact[0].id : "");
 					}}
 				/>
 				<p id="answer-help">Choose a matching name, then Guess.</p>

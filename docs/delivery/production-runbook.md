@@ -19,6 +19,8 @@ FRONTEND_ORIGIN must equal the browser origin exactly, including scheme/port, wi
 
 One process is required: coordinator scheduling, Socket.IO rooms and publication live in memory. Do not scale replicas. Database locks protect durable transitions but do not provide cross-process event distribution. Normal graceful restart closes the transport so browsers automatically reconnect and resubscribe; stored answers and scores remain authoritative.
 
+Real-song clues require FFmpeg on the API host (included in the Docker image) and outbound HTTPS to `api.deezer.com` and `cdnt-preview.dzcdn.net`; no API key is needed. Source-based runs need FFmpeg on PATH. Provider requests and decoding happen outside database locks. The process caches decoded previews for one hour (about 43 MB for the 90-song catalog). A provider or decoder failure returns `503 CLIP_UNAVAILABLE`; players can Retry or Skip without losing saved progress. A restart clears this cache and retains database progress.
+
 ## Migrations and verified legacy adoption
 
 Numbered SQL files are immutable after application. The runner serializes with a PostgreSQL advisory transaction lock, checks an ordered checksum journal, and commits all pending schema changes and journal rows together. CRLF/LF file line endings have equivalent checksums. Failures roll back, allowing retry after diagnosing the cause. Never edit an applied migration or journal to bypass an error; add a new migration. The seed uses stable IDs and ON CONFLICT DO NOTHING; revised released questions need new IDs.

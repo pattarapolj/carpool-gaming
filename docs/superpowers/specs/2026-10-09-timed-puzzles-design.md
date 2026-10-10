@@ -1,5 +1,7 @@
 # Timed puzzle rounds
 
+**Approved song amendment (2026-10-10):** Subsequent requests replace new synthesized-melody rounds with real Deezer previews and expand music to international ’90s/2000s/2010s/2020s, Taylor Swift and Ed Sheeran packs (15 each). This supersedes the starter music/no-external-media restriction below; legacy melody rounds remain playable. Current clip guarantees and runtime are recorded in [contracts](../../specs/contracts.md) and [LLD](../../specs/lld.md).
+
 User-approved direction: rounds contain several puzzles of one theme and format. Cars solve independently against the same server deadline and shuffled sequence. Repeated guesses provide private feedback; searchable canonical answers and aliases prevent spelling mistakes. Skipping preserves guesses and clues and grants no extra clue. Solved puzzles award one point, once. Round results rank by solved count; equal scores share a placing. Random persisted tie ordering assigns last-place theme and second-last format selectors to distinct active cars. A single car chooses both in practice.
 
 The host selects the opening theme and format. After each round, the selected car chooses a theme, then the other chooses a supported format, which opens the next round. Duration uses the existing 5/10/15-minute choice as a round length in puzzle mode. The trip leaderboard accumulates solved counts. Existing host end, leave, reconnect and two-hour ceiling apply. Teams exhausting a finite pack may revisit skipped puzzles or wait; no repeated points within a round.

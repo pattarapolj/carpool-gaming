@@ -274,6 +274,12 @@ it("two phones play as host and captain and restore immediate progression withou
 		await captain.page.getByLabel("Car name").fill("Captain car");
 		await captain.page.getByRole("button", { name: "Join game" }).click();
 		await visible(host.page, "2 cars");
+		// The event observer records WebSocket frames, not the initial polling transport.
+		await Promise.all(
+			people.map((person) =>
+				expect.poll(person.connections, { timeout: 10000 }).toBeGreaterThan(0),
+			),
+		);
 		await host.page
 			.getByRole("button", { name: "Start game", exact: true })
 			.click();

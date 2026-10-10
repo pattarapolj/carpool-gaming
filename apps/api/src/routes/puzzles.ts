@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from "fastify";
-import { z } from "zod";
-import { PuzzleActionSchema } from "../../../../packages/contracts/src/puzzles";
+import {
+	PuzzleActionSchema,
+	SongClipRequestSchema,
+} from "../../../../packages/contracts/src/puzzles";
 import { type GameDb, getBearerToken, resolveSession } from "../services/auth";
 import {
 	loadSongClue,
@@ -22,10 +24,7 @@ export const registerPuzzleRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 				.send({ error: { code, message, requestId: request.id } });
 		if (!session)
 			return fail(401, "UNAUTHENTICATED", "A valid bearer token is required");
-		const parsed = z
-			.object({ puzzleId: z.string().min(1).max(80) })
-			.strict()
-			.safeParse(request.body);
+		const parsed = SongClipRequestSchema.safeParse(request.body);
 		if (!parsed.success)
 			return fail(422, "VALIDATION_ERROR", "Invalid song clip request");
 		try {
