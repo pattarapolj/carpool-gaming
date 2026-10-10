@@ -106,7 +106,7 @@ export default function App() {
 
 	if (session) {
 		return (
-			<main className="app-frame">
+			<main className="app-frame game-frame">
 				<Brand />
 				<GameScreen
 					key={session.token}
@@ -119,10 +119,13 @@ export default function App() {
 	}
 
 	return (
-		<main className="app-frame">
+		<main className="app-frame welcome-frame">
 			<Brand />
 			<div className="welcome-layout">
 				<section className="welcome-copy">
+					<p className="welcome-eyebrow">
+						A little competition. A better journey.
+					</p>
 					<h1>
 						Make the miles
 						<br />
@@ -132,6 +135,20 @@ export default function App() {
 						One phone per car. Everyone plays together. Drivers keep their eyes
 						on the road.
 					</p>
+					<section className="trip-guide" aria-label="How it works">
+						<p className="trip-guide-heading">The road is better together.</p>
+						<ol>
+							<li>
+								<span className="trip-step-number">01</span> Host a game
+							</li>
+							<li>
+								<span className="trip-step-number">02</span> Invite your cars
+							</li>
+							<li>
+								<span className="trip-step-number">03</span> Play along the way
+							</li>
+						</ol>
+					</section>
 				</section>
 
 				<section className="access-card" aria-label="Create or join a game">
@@ -169,6 +186,9 @@ export default function App() {
 							aria-busy={busy}
 						>
 							<div>
+								<p className="form-eyebrow">
+									Every great trip starts somewhere
+								</p>
 								<h2>Set up your game</h2>
 							</div>
 							<label htmlFor="game-name">Game name</label>
@@ -348,6 +368,7 @@ export default function App() {
 							aria-busy={busy}
 						>
 							<div>
+								<p className="form-eyebrow">Your crew is waiting</p>
 								<h2>Join the game</h2>
 							</div>
 							<label htmlFor="join-code">Six-character join code</label>
@@ -401,6 +422,10 @@ export default function App() {
 					</p>
 				</section>
 			</div>
+			<footer className="welcome-footer">
+				<span>Good company. Friendly competition.</span>
+				<span>Passengers play. Drivers stay focused.</span>
+			</footer>
 		</main>
 	);
 }

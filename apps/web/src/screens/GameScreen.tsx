@@ -150,6 +150,7 @@ export function GameScreen({
 			) : (
 				<section className="lobby-layout gameplay-layout">
 					<div className="lobby-heading">
+						<p className="round-meta">YOUR TRIP · {view.game.joinCode}</p>
 						<h1>{view.game.name}</h1>
 					</div>
 					{hasLeft ? (

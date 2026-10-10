@@ -46,18 +46,24 @@ export function PuzzleScreen({
 	const skipped = view.skipped.filter((p) => p.id !== view.puzzle?.id);
 	return (
 		<section className="puzzle-round" aria-labelledby="puzzle-round-heading">
-			<h2 id="puzzle-round-heading">{PUZZLE_FORMATS[view.round.format]}</h2>
-			<p className="round-meta">
-				Round {view.round.sequence} · {pack?.name}
-			</p>
-			{view.round.status === "OPEN" && !complete ? (
-				<>
+			<div className="round-heading">
+				<div>
+					<p className="round-meta">
+						Round {view.round.sequence} · {pack?.name}
+					</p>
+					<h2 id="puzzle-round-heading">{PUZZLE_FORMATS[view.round.format]}</h2>
+				</div>
+				{view.round.status === "OPEN" && !complete ? (
 					<Countdown
 						target={view.round.endsAt}
 						serverTime={snapshot.serverTime}
 						receivedAt={receivedAt}
 						label="Round ends in"
 					/>
+				) : null}
+			</div>
+			{view.round.status === "OPEN" && !complete ? (
+				<>
 					<p className="puzzle-score" role="status">
 						Your car solved {view.solved} of {view.round.total} puzzles
 					</p>

@@ -77,16 +77,18 @@ export function QuestionScreen({
 	}
 	return (
 		<section className="game-card" aria-labelledby="question-heading">
-			<p className="round-meta">
-				ROUND {round.sequence} · {snapshot.callerTeam?.name ?? "HOST VIEW"}
-			</p>
+			<div className="round-heading">
+				<p className="round-meta">
+					ROUND {round.sequence} · {snapshot.callerTeam?.name ?? "HOST VIEW"}
+				</p>
+				<Countdown
+					target={round.endsAt}
+					serverTime={snapshot.serverTime}
+					receivedAt={receivedAt}
+					label="Answer window"
+				/>
+			</div>
 			<h2 id="question-heading">{round.question.prompt}</h2>
-			<Countdown
-				target={round.endsAt}
-				serverTime={snapshot.serverTime}
-				receivedAt={receivedAt}
-				label="Answer window"
-			/>
 			{locked !== null ? (
 				<div className="wait-panel answer-locked" role="status">
 					<svg
