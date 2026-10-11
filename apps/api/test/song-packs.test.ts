@@ -2,6 +2,49 @@ import { expect, it } from "vitest";
 import { catalog } from "../src/services/puzzle-catalog";
 import { songPacks } from "../src/services/song-packs";
 
+it.each(["melodies", "songs-2000s", "songs-2010s", "songs-2020s"] as const)(
+	"offers 60–100 distinct recordings in %s",
+	(theme) => {
+		const pack = songPacks[theme];
+		expect(pack.length).toBeGreaterThanOrEqual(60);
+		expect(pack.length).toBeLessThanOrEqual(100);
+		expect(new Set(pack.map(([id]) => id)).size).toBe(pack.length);
+		expect(
+			new Set(
+				pack.map(
+					([, title, artist]) =>
+						`${title.toLowerCase()}/${artist.toLowerCase()}`,
+				),
+			).size,
+		).toBe(pack.length);
+	},
+);
+
+it("covers Imagine Dragons albums, early EPs, bonus tracks and standalone singles", () => {
+	const pack = songPacks["imagine-dragons"];
+	expect(pack.length).toBeGreaterThan(100);
+	for (const title of [
+		"Tiptoe",
+		"Smoke And Mirrors",
+		"Dancing In The Dark",
+		"Bullet In A Gun",
+		"My Life",
+		"They Don't Know You Like I Do",
+		"Fire in These Hills",
+		"Drive",
+		"All Eyes",
+		"Leave Me",
+		"Woke",
+		"Children of the Sky",
+		"Roots",
+	])
+		expect(
+			pack.some(([, name]) =>
+				name.toLowerCase().startsWith(title.toLowerCase()),
+			),
+		).toBe(true);
+});
+
 it("offers 100 distinct K-pop recordings and at least 100 animal trivia questions", () => {
 	expect(songPacks.kpop).toHaveLength(100);
 	expect(new Set(songPacks.kpop.map((t) => t[0])).size).toBe(100);
