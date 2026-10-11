@@ -815,6 +815,7 @@ it("the last fitting slot neutral-waits at the hard limit and the real coordinat
 		vi.setSystemTime(new Date(origin.getTime() + 7140001));
 		await choose(car.page, second.answer);
 		await choose(host.page, second.answer);
+		await host.page.locator(".previous-results").waitFor({ state: "detached" });
 		await visible(host.page, "Leaderboard");
 		const view = await snapshot(host.page);
 		assert.equal(view.game.status, "WAITING");
