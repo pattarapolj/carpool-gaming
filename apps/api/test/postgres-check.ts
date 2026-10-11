@@ -402,15 +402,15 @@ async function main() {
 			assert.deepEqual(answers.rows, [
 				{
 					car_team_id: sessions[0].teamId,
-					is_correct: null,
-					points_awarded: null,
+					is_correct: true,
+					points_awarded: 1,
 				},
 			]);
 			const scores = await control.query(
 				"SELECT score FROM car_teams WHERE game_id=$1 ORDER BY name",
 				[gameId],
 			);
-			assert.deepEqual(scores.rows, [{ score: 0 }, { score: 0 }]);
+			assert.deepEqual(scores.rows, [{ score: 1 }, { score: 0 }]);
 			const rounds = await control.query(
 				"SELECT status,revealed_at FROM rounds WHERE id=$1",
 				[opened.round.id],
@@ -481,7 +481,7 @@ async function main() {
 					[opened.round.id],
 				);
 				assert.deepEqual(before.rows, [
-					{ status: "OPEN", score: 0 },
+					{ status: "OPEN", score: 1 },
 					{ status: "OPEN", score: 0 },
 				]);
 				release();
@@ -720,7 +720,7 @@ async function main() {
 						game_status: "WAITING",
 						completed_at: null,
 						round_status: "OPEN",
-						score: 0,
+						score: 1,
 					},
 					{
 						game_status: "WAITING",
