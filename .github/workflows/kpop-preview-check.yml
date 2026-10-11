@@ -1,0 +1,72 @@
+name: K-pop preview check
+on:
+  push:
+    branches: [pattarapolj/kpop-300-and-song-reveal]
+    paths: ['.github/workflows/kpop-preview-check.yml', 'apps/api/src/services/song-packs.ts']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  previews:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Discover and verify additional recordings
+        shell: python
+        run: |
+          import json, urllib.request, urllib.parse, subprocess, time, re
+          def get(url):
+              for attempt in range(4):
+                  try:
+                      with urllib.request.urlopen(url, timeout=20) as r:
+                          return r.read()
+                  except Exception:
+                      if attempt == 3: raise
+                      time.sleep(2 * (attempt + 1))
+          artists = ["BIGBANG", "SHINee", "Girls' Generation", "2NE1", "IU", "ITZY",
+                     "LE SSERAFIM", "(G)I-DLE", "TOMORROW X TOGETHER", "ENHYPEN",
+                     "ATEEZ", "NCT 127", "NCT DREAM", "MAMAMOO", "GFRIEND", "STAYC",
+                     "NMIXX", "ILLIT", "PSY", "KISS OF LIFE", "BTS", "BLACKPINK",
+                     "TWICE", "EXO", "SEVENTEEN", "Stray Kids", "Red Velvet", "aespa", "IVE", "NewJeans"]
+          source = open("apps/api/src/services/song-packs.ts").read().split("kpop: [", 1)[1].split("\n\t],", 1)[0]
+          existing = {int(i) for i in re.findall(r"\[(\d+),", source)}
+          titles = set()
+          accepted = []
+          def normalize(s):
+              return re.sub(r"[^\w]", "", re.sub(r"\([^)]*\)|\[[^]]*\]", "", s).casefold())
+          for artist in artists:
+              query = urllib.parse.urlencode({"q": 'artist:"' + artist + '"', "limit": 100})
+              tracks = json.loads(get("https://api.deezer.com/search?" + query)).get("data", [])
+              count = 0
+              for candidate in tracks:
+                  if count >= 10 or len(accepted) >= 220: break
+                  if candidate["id"] in existing or normalize(candidate["artist"]["name"]) != normalize(artist): continue
+                  if re.search(r"remix|instrumental|karaoke|live|japanese|english ver|sped up|slowed", candidate["title"], re.I): continue
+                  key = normalize(candidate["title"]) + "/" + normalize(artist)
+                  if key in titles: continue
+                  try:
+                      track = json.loads(get("https://api.deezer.com/track/" + str(candidate["id"])))
+                      if not track.get("preview") or track.get("artist", {}).get("id") != candidate["artist"]["id"]: continue
+                      audio = get(track["preview"])
+                      decoded = subprocess.run(["ffmpeg", "-v", "error", "-i", "pipe:0", "-t", "15",
+                                                "-f", "s16le", "-ar", "16000", "-ac", "1", "pipe:1"],
+                                               input=audio, capture_output=True, timeout=20)
+                      if decoded.returncode or len(decoded.stdout) < 480000: continue
+                      record = [track["id"], track["title"], track["artist"]["name"]]
+                      print("VERIFIED_TRACK " + json.dumps(record, ensure_ascii=False), flush=True)
+                      accepted.append(record)
+                      existing.add(track["id"])
+                      titles.add(key)
+                      count += 1
+                  except Exception as error:
+                      print("Unavailable candidate " + str(candidate["id"]) + ": " + type(error).__name__, flush=True)
+              print("ARTIST_COUNT " + artist + " " + str(count), flush=True)
+          print("VERIFIED_TOTAL " + str(len(accepted)), flush=True)
+          if len(accepted) < 200: raise Exception("Fewer than 200 additional playable recordings")
