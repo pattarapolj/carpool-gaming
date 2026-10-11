@@ -167,6 +167,209 @@ async function answerFor(roundId: string, puzzleId: string) {
 	return catalog.find((p) => p.id === internalId)?.answerId as string;
 }
 
+it("reveals a song only to the giving-up car, persists it, and awards no points", async () => {
+	const { id, tokens } = await setup("kpop", "MUSIC", 2);
+	const before = (await snapshot(id, tokens[0])).puzzles;
+	const target = await answerFor(before.round.id, before.puzzle.id);
+	const name = before.options.find((o: { id: string }) => o.id === target).name;
+	expect(before.puzzle.revealedAnswer).toBeUndefined();
+	const giveUp = {
+		kind: "give-up",
+		roundId: before.round.id,
+		puzzleId: before.puzzle.id,
+	};
+	expect((await action(id, tokens[0], giveUp)).statusCode).toBe(200);
+	// A retry after a lost response is safe.
+	expect((await action(id, tokens[0], giveUp)).statusCode).toBe(200);
+	const revealed = (await snapshot(id, tokens[0])).puzzles;
+	expect(revealed.puzzle.id).toBe(before.puzzle.id);
+	expect(revealed.puzzle.revealedAnswer).toBe(name);
+	expect(revealed.solved).toBe(0);
+	expect(revealed.skipped).toEqual([]);
+	const other = (await snapshot(id, tokens[1])).puzzles;
+	expect(other.puzzle.id).toBe(before.puzzle.id);
+	expect(other.puzzle.revealedAnswer).toBeUndefined();
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "guess",
+				roundId: before.round.id,
+				puzzleId: before.puzzle.id,
+				answerId: target,
+			})
+		).statusCode,
+	).toBe(409);
+	expect(
+		(
+			await action(id, tokens[1], {
+				kind: "guess",
+				roundId: before.round.id,
+				puzzleId: before.puzzle.id,
+				answerId: target,
+			})
+		).json().result.pointsAwarded,
+	).toBe(1);
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "next",
+				roundId: before.round.id,
+				puzzleId: before.puzzle.id,
+			})
+		).statusCode,
+	).toBe(200);
+	const next = (await snapshot(id, tokens[0])).puzzles;
+	expect(next.puzzle.id).not.toBe(before.puzzle.id);
+	expect(next.puzzle.revealedAnswer).toBeUndefined();
+	expect(next.solved).toBe(0);
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "revisit",
+				roundId: before.round.id,
+				puzzleId: before.puzzle.id,
+			})
+		).statusCode,
+	).toBe(422);
+	// Final scoring also excludes the revealed song.
+	await tick(storage, () => new Date(before.round.endsAt));
+	const results = await snapshot(id, tokens[0]);
+	expect(results.callerTeam.score).toBe(0);
+	expect(
+		results.puzzles.results.find(
+			(t: { teamId: string }) => t.teamId === results.callerTeam.id,
+		).solved,
+	).toBe(0);
+});
+
+it("requires Next song to leave a revealed song, even through older skip/revisit actions", async () => {
+	const { id, tokens } = await setup("kpop", "MUSIC", 1);
+	const first = (await snapshot(id, tokens[0])).puzzles;
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "skip",
+				roundId: first.round.id,
+				puzzleId: first.puzzle.id,
+			})
+		).statusCode,
+	).toBe(200);
+	const current = (await snapshot(id, tokens[0])).puzzles;
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "give-up",
+				roundId: current.round.id,
+				puzzleId: current.puzzle.id,
+			})
+		).statusCode,
+	).toBe(200);
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "skip",
+				roundId: current.round.id,
+				puzzleId: current.puzzle.id,
+			})
+		).statusCode,
+	).toBe(409);
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "revisit",
+				roundId: current.round.id,
+				puzzleId: first.puzzle.id,
+			})
+		).statusCode,
+	).toBe(409);
+	expect((await snapshot(id, tokens[0])).puzzles.puzzle.id).toBe(
+		current.puzzle.id,
+	);
+});
+
+it("can give up the final song and reach the end without replaying it or scoring", async () => {
+	const { id, tokens } = await setup("kpop", "MUSIC", 1);
+	const before = (await snapshot(id, tokens[0])).puzzles;
+	await db.query(
+		"UPDATE puzzle_rounds SET puzzle_ids=puzzle_ids[1:1] WHERE id=$1",
+		[before.round.id],
+	);
+	const current = (await snapshot(id, tokens[0])).puzzles;
+	expect(current.round.total).toBe(1);
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "give-up",
+				roundId: current.round.id,
+				puzzleId: current.puzzle.id,
+			})
+		).statusCode,
+	).toBe(200);
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "next",
+				roundId: current.round.id,
+				puzzleId: current.puzzle.id,
+			})
+		).statusCode,
+	).toBe(200);
+	const exhausted = (await snapshot(id, tokens[0])).puzzles;
+	expect(exhausted.puzzle).toBeNull();
+	expect(exhausted.solved).toBe(0);
+	expect(exhausted.skipped).toEqual([]);
+});
+
+it("does not allow next-song actions to skip an unrevealed song", async () => {
+	const { id, tokens } = await setup("kpop", "MUSIC", 1);
+	const p = (await snapshot(id, tokens[0])).puzzles;
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "next",
+				roundId: p.round.id,
+				puzzleId: p.puzzle.id,
+			})
+		).statusCode,
+	).toBe(409);
+	expect((await snapshot(id, tokens[0])).puzzles.puzzle.id).toBe(p.puzzle.id);
+});
+
+it("rejects give-up for other formats, stale puzzles, and expired rounds", async () => {
+	const animal = await setup("animals", "TRIVIA", 1);
+	const a = (await snapshot(animal.id, animal.tokens[0])).puzzles;
+	expect(
+		(
+			await action(animal.id, animal.tokens[0], {
+				kind: "give-up",
+				roundId: a.round.id,
+				puzzleId: a.puzzle.id,
+			})
+		).statusCode,
+	).toBe(422);
+	const { id, tokens } = await setup("kpop", "MUSIC", 1);
+	const p = (await snapshot(id, tokens[0])).puzzles;
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "give-up",
+				roundId: p.round.id,
+				puzzleId: `${p.round.id}/1`,
+			})
+		).statusCode,
+	).toBe(409);
+	await tick(storage, () => new Date(p.round.endsAt));
+	expect(
+		(
+			await action(id, tokens[0], {
+				kind: "give-up",
+				roundId: p.round.id,
+				puzzleId: p.puzzle.id,
+			})
+		).statusCode,
+	).toBe(409);
+});
+
 it("rejects legacy melody guesses in new song rounds", async () => {
 	const { id, tokens } = await setup("melodies", "MUSIC", 1);
 	const p = (await snapshot(id, tokens[0])).puzzles;

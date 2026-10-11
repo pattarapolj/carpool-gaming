@@ -1,0 +1,25 @@
+name: K-pop preview check
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [pattarapolj/kpop-300-and-song-reveal]
+    paths:
+      - '.github/workflows/kpop-preview-check.yml'
+      - 'apps/api/scripts/verify-kpop-previews.py'
+      - 'apps/api/src/services/song-packs.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  previews:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Verify added recordings and decode every preview
+        run: python3 apps/api/scripts/verify-kpop-previews.py

@@ -6,6 +6,25 @@ import {
 	SongClipResponseSchema,
 } from "../src/index";
 
+it.each(["give-up", "next"])(
+	"accepts a strict %s action for the current puzzle",
+	(kind) => {
+		const action = {
+			kind,
+			roundId: "a6775a41-50ab-4d61-b1fa-f9f07a28c62b",
+			puzzleId: "round/0",
+		};
+		expect(PuzzleActionSchema.safeParse(action).success).toBe(true);
+		expect(
+			PuzzleActionSchema.safeParse({
+				...action,
+				pointsAwarded: 1,
+				revealedAnswer: "A song",
+			}).success,
+		).toBe(false);
+	},
+);
+
 it("accepts only a puzzle ID for song clips and only unlocked WAV audio in responses", () => {
 	expect(SongClipRequestSchema.safeParse({ puzzleId: "round/0" }).success).toBe(
 		true,

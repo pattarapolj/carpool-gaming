@@ -165,6 +165,8 @@ it("plays a two-car timed round, restores guesses and skipped puzzles, and start
 		await host.getByLabel("Game name", { exact: true }).fill("Puzzle convoy");
 		await host.getByLabel("Car name", { exact: true }).fill("Blue car");
 		await host.getByLabel("Game style").selectOption("puzzles");
+		await host.getByLabel("Theme", { exact: true }).selectOption("animals");
+		await host.getByLabel("Game type", { exact: true }).selectOption("TRIVIA");
 		await host
 			.getByRole("button", { name: "Create game", exact: true })
 			.click();
@@ -211,7 +213,7 @@ it("plays a two-car timed round, restores guesses and skipped puzzles, and start
 			.poll(async () => (await snapshot(host)).puzzles?.solved)
 			.toBe(1);
 		await host.screenshot({
-			path: join(harness.artifacts, "puzzles-character-mobile.png"),
+			path: join(harness.artifacts, "puzzles-trivia-mobile.png"),
 			fullPage: true,
 		});
 		await harness.control.query(
@@ -341,6 +343,31 @@ it.each(
 					{ timeout: 10000 },
 				)
 				.toBe(2);
+			// Giving up persists the reveal until the captain explicitly continues.
+			const stuck = await snapshot(page);
+			const revealedName = await target(stuck);
+			await page
+				.getByRole("button", { name: "Give up & reveal", exact: true })
+				.click();
+			await page
+				.getByRole("heading", { name: revealedName, exact: true })
+				.waitFor();
+			await page.reload();
+			await page
+				.getByRole("heading", { name: revealedName, exact: true })
+				.waitFor();
+			expect((await snapshot(page)).puzzles?.solved).toBe(1);
+			expect((await snapshot(page)).puzzles?.puzzle?.id).toBe(
+				stuck.puzzles?.puzzle?.id,
+			);
+			await page
+				.getByRole("button", { name: "Next song", exact: true })
+				.click();
+			await page.getByLabel("Search answers").waitFor();
+			expect((await snapshot(page)).puzzles?.puzzle?.id).not.toBe(
+				stuck.puzzles?.puzzle?.id,
+			);
+			expect((await snapshot(page)).puzzles?.solved).toBe(1);
 			await page.screenshot({
 				path: join(harness.artifacts, `puzzles-${theme}-mobile.png`),
 				fullPage: true,

@@ -84,7 +84,9 @@ export function PuzzleScreen({
 					) : (
 						<p role="status">
 							{myId
-								? "You've reached the end of this pack. Revisit skipped puzzles while time remains."
+								? view.skipped.length
+									? "You've reached the end of this pack. Revisit skipped puzzles while time remains."
+									: "You've reached the end of this pack. Wait for the round results."
 								: "Your host session has no car. Watch the round and leaderboard here."}
 						</p>
 					)}
@@ -104,7 +106,11 @@ export function PuzzleScreen({
 											className="quiet-button"
 											type="button"
 											key={p.id}
-											disabled={disabled || expired}
+											disabled={
+												disabled ||
+												expired ||
+												Boolean(view.puzzle?.revealedAnswer)
+											}
 											onClick={() =>
 												void onAction({
 													kind: "revisit",
@@ -294,91 +300,125 @@ function GuessPuzzle({
 					</audio>
 				) : null}
 			</div>
-			<form
-				className="access-form puzzle-answer-form"
-				onSubmit={(event) => {
-					event.preventDefault();
-					if (answerId && !disabled && available.some((o) => o.id === answerId))
-						void onAction({
-							kind: "guess",
-							roundId,
-							puzzleId: puzzle.id,
-							answerId,
-						}).then((accepted) => {
-							if (accepted) {
-								setQuery("");
-								setAnswerId("");
-							}
-						});
-				}}
-			>
-				<label htmlFor="puzzle-answer">Search answers</label>
-				<input
-					id="puzzle-answer"
-					ref={answerInput}
-					autoComplete="off"
-					maxLength={100}
-					value={query}
-					disabled={disabled}
-					aria-describedby="answer-help"
-					placeholder={
-						format === "MUSIC" ? "Song title or artist" : "Type a name…"
-					}
-					onChange={(event) => {
-						const value = event.currentTarget.value;
-						setQuery(value);
-						const exact = available.filter((o) =>
-							[o.name, ...o.aliases].some(
-								(name) => normalize(name) === normalize(value),
-							),
-						);
-						setAnswerId(exact.length === 1 ? exact[0].id : "");
-					}}
-				/>
-				<p id="answer-help">Choose a matching name, then Guess.</p>
-				{query.trim() && !answerId ? (
-					<fieldset className="answer-suggestions" disabled={disabled}>
-						<legend className="visually-hidden">Answer suggestions</legend>
-						{matches.map((o) => (
-							<button
-								key={o.id}
-								type="button"
-								className="suggestion-button"
-								aria-pressed={answerId === o.id}
-								onClick={() => {
-									setQuery(o.name);
-									setAnswerId(o.id);
-									answerInput.current?.focus();
-								}}
-							>
-								{o.name}
-							</button>
-						))}
-						{!matches.length ? (
-							<p>No unused answers match. Try part of a name.</p>
-						) : null}
-					</fieldset>
-				) : null}
-				<div className="action-row play-actions">
-					<button
-						type="submit"
-						className="primary-button"
-						disabled={disabled || !available.some((o) => o.id === answerId)}
-					>
-						Guess
-					</button>
+			{puzzle.revealedAnswer ? (
+				<section
+					className="song-reveal"
+					aria-label="Revealed song"
+					aria-live="polite"
+				>
+					<h4>{puzzle.revealedAnswer}</h4>
+					<p>0 points · Your car gave up on this song.</p>
 					<button
 						type="button"
-						className="quiet-button"
+						className="primary-button"
 						disabled={disabled}
 						onClick={() =>
-							void onAction({ kind: "skip", roundId, puzzleId: puzzle.id })
+							void onAction({ kind: "next", roundId, puzzleId: puzzle.id })
 						}
 					>
-						Skip puzzle
+						Next song
 					</button>
-				</div>
-			</form>
+				</section>
+			) : (
+				<form
+					className="access-form puzzle-answer-form"
+					onSubmit={(event) => {
+						event.preventDefault();
+						if (
+							answerId &&
+							!disabled &&
+							available.some((o) => o.id === answerId)
+						)
+							void onAction({
+								kind: "guess",
+								roundId,
+								puzzleId: puzzle.id,
+								answerId,
+							}).then((accepted) => {
+								if (accepted) {
+									setQuery("");
+									setAnswerId("");
+								}
+							});
+					}}
+				>
+					<label htmlFor="puzzle-answer">Search answers</label>
+					<input
+						id="puzzle-answer"
+						ref={answerInput}
+						autoComplete="off"
+						maxLength={100}
+						value={query}
+						disabled={disabled}
+						aria-describedby="answer-help"
+						placeholder={
+							format === "MUSIC" ? "Song title or artist" : "Type a name…"
+						}
+						onChange={(event) => {
+							const value = event.currentTarget.value;
+							setQuery(value);
+							const exact = available.filter((o) =>
+								[o.name, ...o.aliases].some(
+									(name) => normalize(name) === normalize(value),
+								),
+							);
+							setAnswerId(exact.length === 1 ? exact[0].id : "");
+						}}
+					/>
+					<p id="answer-help">Choose a matching name, then Guess.</p>
+					{query.trim() && !answerId ? (
+						<fieldset className="answer-suggestions" disabled={disabled}>
+							<legend className="visually-hidden">Answer suggestions</legend>
+							{matches.map((o) => (
+								<button
+									key={o.id}
+									type="button"
+									className="suggestion-button"
+									aria-pressed={answerId === o.id}
+									onClick={() => {
+										setQuery(o.name);
+										setAnswerId(o.id);
+										answerInput.current?.focus();
+									}}
+								>
+									{o.name}
+								</button>
+							))}
+							{!matches.length ? (
+								<p>No unused answers match. Try part of a name.</p>
+							) : null}
+						</fieldset>
+					) : null}
+					<div className="action-row play-actions">
+						<button
+							type="submit"
+							className="primary-button"
+							disabled={disabled || !available.some((o) => o.id === answerId)}
+						>
+							Guess
+						</button>
+						<button
+							type="button"
+							className="quiet-button"
+							disabled={disabled}
+							onClick={() =>
+								void onAction({
+									kind: format === "MUSIC" ? "give-up" : "skip",
+									roundId,
+									puzzleId: puzzle.id,
+								})
+							}
+						>
+							{format === "MUSIC" ? "Give up & reveal" : "Skip puzzle"}
+						</button>
+					</div>
+				</form>
+			)}
+			{format === "MUSIC" && !puzzle.revealedAnswer ? (
+				<p className="answer-help">
+					Giving up reveals the song for your car and earns 0 points.
+				</p>
+			) : null}
 			{puzzle.guesses.length ? (
 				<section aria-label="Your guesses" aria-live="polite">
 					<h4>Your guesses</h4>
@@ -458,7 +498,9 @@ function SongClip({
 					preload="metadata"
 					src={media}
 					onError={() =>
-						setError("Cannot play this clip. Retry or skip this puzzle.")
+						setError(
+							"Cannot play this clip. Retry or give up to reveal the song.",
+						)
 					}
 				>
 					<track kind="captions" />
