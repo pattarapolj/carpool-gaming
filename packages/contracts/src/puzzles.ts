@@ -20,6 +20,7 @@ export const PuzzleThemeSchema = z.enum([
 	"taylor-swift",
 	"ed-sheeran",
 	"adele",
+	"imagine-dragons",
 	"kpop",
 	"songs-2000s",
 	"songs-2010s",
@@ -35,6 +36,7 @@ export const PUZZLE_PACKS = [
 	{ id: "taylor-swift", name: "Taylor Swift", formats: ["MUSIC"] },
 	{ id: "ed-sheeran", name: "Ed Sheeran", formats: ["MUSIC"] },
 	{ id: "adele", name: "Adele", formats: ["MUSIC"] },
+	{ id: "imagine-dragons", name: "Imagine Dragons", formats: ["MUSIC"] },
 ] as const;
 export const PuzzleSetupSchema = z
 	.object({ theme: PuzzleThemeSchema, format: PuzzleFormatSchema })

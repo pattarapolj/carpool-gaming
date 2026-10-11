@@ -50,6 +50,10 @@ it.each([
 		],
 	],
 	["adele", ["Chasing Pavements", "Someone Like You", "Hello", "Easy On Me"]],
+	[
+		"imagine-dragons",
+		["Radioactive", "Demons", "Believer", "Thunder", "Enemy"],
+	],
 ] as const)("includes album tracks in %s", (theme, titles) => {
 	const pack = songPacks[theme as keyof typeof songPacks];
 	for (const title of titles)
