@@ -165,6 +165,8 @@ it("plays a two-car timed round, restores guesses and skipped puzzles, and start
 		await host.getByLabel("Game name", { exact: true }).fill("Puzzle convoy");
 		await host.getByLabel("Car name", { exact: true }).fill("Blue car");
 		await host.getByLabel("Game style").selectOption("puzzles");
+		await host.getByLabel("Theme", { exact: true }).selectOption("animals");
+		await host.getByLabel("Game type", { exact: true }).selectOption("TRIVIA");
 		await host
 			.getByRole("button", { name: "Create game", exact: true })
 			.click();
@@ -211,7 +213,7 @@ it("plays a two-car timed round, restores guesses and skipped puzzles, and start
 			.poll(async () => (await snapshot(host)).puzzles?.solved)
 			.toBe(1);
 		await host.screenshot({
-			path: join(harness.artifacts, "puzzles-character-mobile.png"),
+			path: join(harness.artifacts, "puzzles-trivia-mobile.png"),
 			fullPage: true,
 		});
 		await harness.control.query(
