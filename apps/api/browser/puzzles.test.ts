@@ -194,6 +194,7 @@ it("plays a two-car timed round, restores guesses and skipped puzzles, and start
 			.poll(async () => (await snapshot(host)).puzzles?.puzzle?.number)
 			.toBe(2);
 		await host.reload();
+		await host.getByText("Skipped puzzles (1)", { exact: true }).click();
 		await host
 			.getByRole("button", { name: "Revisit puzzle 1", exact: true })
 			.click();

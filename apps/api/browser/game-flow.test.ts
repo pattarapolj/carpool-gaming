@@ -77,7 +77,15 @@ async function client(width = 390) {
 type Client = Awaited<ReturnType<typeof client>>;
 
 async function visible(page: Page, text: string) {
-	await page.getByText(text, { exact: true }).waitFor({ state: "visible" });
+	const target = page.getByText(text, { exact: true });
+	await target.waitFor({ state: "attached" });
+	const disclosure = page.locator("details").filter({ has: target });
+	if (
+		(await disclosure.count()) &&
+		(await disclosure.getAttribute("open")) === null
+	)
+		await disclosure.locator("summary").click();
+	await target.waitFor({ state: "visible" });
 }
 
 async function inviteLink(page: Page) {
