@@ -43,7 +43,14 @@ jobs:
               return re.sub(r"[^\w]", "", re.sub(r"\([^)]*\)|\[[^]]*\]", "", s).casefold())
           for artist in artists:
               query = urllib.parse.urlencode({"q": 'artist:"' + artist + '"', "limit": 100})
-              tracks = json.loads(get("https://api.deezer.com/search?" + query)).get("data", [])
+              search_result = json.loads(get("https://api.deezer.com/search?" + query))
+              print("SEARCH_RESULT " + artist + " " + json.dumps(search_result)[:1500], flush=True)
+              artist_query = urllib.parse.urlencode({"q": artist, "limit": 25})
+              artist_results = json.loads(get("https://api.deezer.com/search/artist?" + artist_query))
+              print("ARTIST_RESULT " + artist + " " + json.dumps(artist_results)[:1500], flush=True)
+              match = next((a for a in artist_results.get("data", []) if normalize(a["name"]) == normalize(artist)), None)
+              tracks = json.loads(get("https://api.deezer.com/artist/" + str(match["id"]) + "/top?limit=100")).get("data", []) if match else search_result.get("data", [])
+              print("TOP_COUNT " + artist + " " + str(len(tracks)), flush=True)
               count = 0
               for candidate in tracks:
                   if count >= 10 or len(accepted) >= 220: break
