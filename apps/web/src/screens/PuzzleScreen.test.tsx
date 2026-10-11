@@ -75,6 +75,41 @@ function show(puzzles = view, act = vi.fn(async () => true)) {
 	);
 	return act;
 }
+
+it("offers give up and reveal in music mode instead of skip", () => {
+	const act = show({
+		...view,
+		round: { ...view.round, theme: "kpop", format: "MUSIC" },
+	});
+	expect(screen.queryByRole("button", { name: "Skip puzzle" })).toBeNull();
+	fireEvent.click(screen.getByRole("button", { name: "Give up & reveal" }));
+	expect(act).toHaveBeenCalledWith({
+		kind: "give-up",
+		roundId,
+		puzzleId: view.puzzle?.id,
+	});
+});
+
+it("keeps a revealed song visible with zero points until Next song", () => {
+	if (!view.puzzle) throw new Error("Missing fixture puzzle");
+	const act = show({
+		...view,
+		round: { ...view.round, theme: "kpop", format: "MUSIC" },
+		puzzle: { ...view.puzzle, revealedAnswer: "Dynamite — BTS" },
+	});
+	expect(screen.getByText("Dynamite — BTS")).toBeTruthy();
+	expect(screen.getByText(/0 points/)).toBeTruthy();
+	expect(screen.queryByLabelText("Search answers")).toBeNull();
+	expect(screen.queryByRole("button", { name: "Guess" })).toBeNull();
+	expect(screen.queryByRole("button", { name: "Give up & reveal" })).toBeNull();
+	expect(act).not.toHaveBeenCalled();
+	fireEvent.click(screen.getByRole("button", { name: "Next song" }));
+	expect(act).toHaveBeenCalledWith({
+		kind: "next",
+		roundId,
+		puzzleId: view.puzzle.id,
+	});
+});
 it("shows answer suggestions only while searching for an unselected answer", () => {
 	show();
 	expect(screen.queryByRole("button", { name: "Naruto Uzumaki" })).toBeNull();
@@ -289,5 +324,5 @@ it("lets passengers retry a failed song clip without losing the puzzle", async (
 	expect(container.querySelector("audio")?.getAttribute("src")).toBe(
 		"data:audio/wav;base64,UklGRg==",
 	);
-	expect(screen.getByRole("button", { name: "Skip puzzle" })).toBeTruthy();
+	expect(screen.getByRole("button", { name: "Give up & reveal" })).toBeTruthy();
 });

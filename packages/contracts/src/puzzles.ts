@@ -28,7 +28,7 @@ export const PuzzleThemeSchema = z.enum([
 ]);
 export const PUZZLE_PACKS = [
 	{ id: "animals", name: "Animals", formats: ["PICTURE", "TRIVIA"] },
-	{ id: "kpop", name: "K-pop · 100 songs", formats: ["MUSIC"] },
+	{ id: "kpop", name: "K-pop · 300 songs", formats: ["MUSIC"] },
 	{ id: "melodies", name: "International ’90s songs", formats: ["MUSIC"] },
 	{ id: "songs-2000s", name: "International 2000s songs", formats: ["MUSIC"] },
 	{ id: "songs-2010s", name: "International 2010s songs", formats: ["MUSIC"] },
@@ -60,6 +60,20 @@ export const SongClipResponseSchema = z
 	.object({ media: z.string().startsWith("data:audio/wav;base64,") })
 	.strict();
 export const PuzzleActionSchema = z.discriminatedUnion("kind", [
+	z
+		.object({
+			kind: z.literal("give-up"),
+			roundId: RoundIdSchema,
+			puzzleId: PuzzleIdSchema,
+		})
+		.strict(),
+	z
+		.object({
+			kind: z.literal("next"),
+			roundId: RoundIdSchema,
+			puzzleId: PuzzleIdSchema,
+		})
+		.strict(),
 	z
 		.object({
 			kind: z.literal("guess"),
@@ -134,6 +148,7 @@ export const PuzzleViewSchema = z
 				number: z.number().int().positive(),
 				prompt: z.string(),
 				media: z.string().nullable(),
+				revealedAnswer: z.string().optional(),
 				guesses: z.array(
 					z
 						.object({

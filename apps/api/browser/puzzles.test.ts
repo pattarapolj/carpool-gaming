@@ -341,6 +341,31 @@ it.each(
 					{ timeout: 10000 },
 				)
 				.toBe(2);
+			// Giving up persists the reveal until the captain explicitly continues.
+			const stuck = await snapshot(page);
+			const revealedName = await target(stuck);
+			await page
+				.getByRole("button", { name: "Give up & reveal", exact: true })
+				.click();
+			await page
+				.getByRole("heading", { name: revealedName, exact: true })
+				.waitFor();
+			await page.reload();
+			await page
+				.getByRole("heading", { name: revealedName, exact: true })
+				.waitFor();
+			expect((await snapshot(page)).puzzles?.solved).toBe(1);
+			expect((await snapshot(page)).puzzles?.puzzle?.id).toBe(
+				stuck.puzzles?.puzzle?.id,
+			);
+			await page
+				.getByRole("button", { name: "Next song", exact: true })
+				.click();
+			await page.getByLabel("Search answers").waitFor();
+			expect((await snapshot(page)).puzzles?.puzzle?.id).not.toBe(
+				stuck.puzzles?.puzzle?.id,
+			);
+			expect((await snapshot(page)).puzzles?.solved).toBe(1);
 			await page.screenshot({
 				path: join(harness.artifacts, `puzzles-${theme}-mobile.png`),
 				fullPage: true,

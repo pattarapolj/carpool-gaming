@@ -30,6 +30,7 @@ type Progress = {
 	guesses: Record<string, string[]>;
 	solved: string[];
 	skipped: string[];
+	given_up: string[];
 	tie_order: number;
 };
 function publicPuzzleId(round: Round, index: number) {
@@ -204,6 +205,13 @@ export async function getPuzzleView(
 						id: publicPuzzleId(round, progress.current_index),
 						number: progress.current_index + 1,
 						prompt: puzzle.prompt,
+						...(progress.given_up.includes(puzzle.id)
+							? {
+									revealedAnswer: entries[round.theme].find(
+										(e) => e.id === puzzle.answerId,
+									)?.name,
+								}
+							: {}),
 						media: clueMedia(
 							puzzle,
 							guesses.filter((g) => g !== puzzle.answerId).length,
@@ -311,7 +319,7 @@ export async function loadSongClue(
 		throw new PuzzleError(
 			503,
 			"CLIP_UNAVAILABLE",
-			"Song clip unavailable. Retry or skip this puzzle.",
+			"Song clip unavailable. Retry or give up to reveal the song.",
 		);
 	}
 }
@@ -446,6 +454,17 @@ export async function puzzleAction(
 					"FORBIDDEN",
 					"Your car is not in this round",
 				);
+			const current = round.puzzle_ids[progress.current_index];
+			if (
+				progress.given_up.includes(current) &&
+				action.kind !== "next" &&
+				action.kind !== "give-up"
+			)
+				throw new PuzzleError(
+					409,
+					"SONG_REVEALED",
+					"This song was revealed and cannot earn points. Choose Next song.",
+				);
 			const requestedId = round.puzzle_ids.find(
 				(_, index) => publicPuzzleId(round, index) === action.puzzleId,
 			);
@@ -462,6 +481,7 @@ export async function puzzleAction(
 				if (
 					current &&
 					!progress.solved.includes(current) &&
+					!progress.given_up.includes(current) &&
 					!progress.skipped.includes(current)
 				)
 					progress.skipped.push(current);
@@ -477,6 +497,26 @@ export async function puzzleAction(
 				const puzzle = catalog.find((p) => p.id === currentId);
 				if (!puzzle)
 					throw new PuzzleError(422, "PUZZLE_NOT_FOUND", "Puzzle unavailable");
+				if (
+					(action.kind === "give-up" || action.kind === "next") &&
+					round.format !== "MUSIC"
+				)
+					throw new PuzzleError(
+						422,
+						"NOT_A_SONG",
+						"Only song puzzles can be revealed",
+					);
+				const givenUp = progress.given_up.includes(currentId);
+				if (action.kind === "next" && !givenUp)
+					throw new PuzzleError(
+						409,
+						"SONG_NOT_REVEALED",
+						"Give up and reveal this song before continuing.",
+					);
+				if (action.kind === "give-up") {
+					if (!givenUp) progress.given_up.push(currentId);
+					progress.skipped = progress.skipped.filter((id) => id !== currentId);
+				}
 				if (action.kind === "guess") {
 					if (
 						!round.puzzle_ids.some(
@@ -510,18 +550,28 @@ export async function puzzleAction(
 							(id) => id !== currentId,
 						);
 					}
-				} else if (!progress.skipped.includes(currentId))
+				} else if (
+					action.kind === "skip" &&
+					!givenUp &&
+					!progress.skipped.includes(currentId)
+				)
 					progress.skipped.push(currentId);
-				if (action.kind === "skip" || progress.solved.includes(currentId)) {
+				if (
+					action.kind === "skip" ||
+					action.kind === "next" ||
+					progress.solved.includes(currentId)
+				) {
 					const next = round.puzzle_ids.findIndex(
 						(id) =>
-							!progress.solved.includes(id) && !progress.skipped.includes(id),
+							!progress.solved.includes(id) &&
+							!progress.skipped.includes(id) &&
+							!progress.given_up.includes(id),
 					);
 					progress.current_index = next < 0 ? round.puzzle_ids.length : next;
 				}
 			}
 			await tx.query(
-				"UPDATE puzzle_progress SET current_index=$3,guesses=$4,solved=$5,skipped=$6 WHERE round_id=$1 AND team_id=$2",
+				"UPDATE puzzle_progress SET current_index=$3,guesses=$4,solved=$5,skipped=$6,given_up=$7 WHERE round_id=$1 AND team_id=$2",
 				[
 					round.id,
 					session.teamId,
@@ -529,6 +579,7 @@ export async function puzzleAction(
 					JSON.stringify(progress.guesses),
 					progress.solved,
 					progress.skipped,
+					progress.given_up,
 				],
 			);
 		}

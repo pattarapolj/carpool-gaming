@@ -45,9 +45,16 @@ it("covers Imagine Dragons albums, early EPs, bonus tracks and standalone single
 		).toBe(true);
 });
 
-it("offers 100 distinct K-pop recordings and at least 100 animal trivia questions", () => {
-	expect(songPacks.kpop).toHaveLength(100);
-	expect(new Set(songPacks.kpop.map((t) => t[0])).size).toBe(100);
+it("offers 300 distinct K-pop recordings and at least 100 animal trivia questions", () => {
+	expect(songPacks.kpop).toHaveLength(300);
+	expect(new Set(songPacks.kpop.map((t) => t[0])).size).toBe(300);
+	expect(
+		new Set(songPacks.kpop.map(([, title, artist]) => `${title}/${artist}`))
+			.size,
+	).toBe(300);
+	expect(
+		new Set(songPacks.kpop.map(([, , artist]) => artist)).size,
+	).toBeGreaterThanOrEqual(20);
 	const trivia = catalog.filter(
 		(p) => p.theme === "animals" && p.format === "TRIVIA",
 	);
