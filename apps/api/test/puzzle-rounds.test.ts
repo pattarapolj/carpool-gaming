@@ -53,6 +53,10 @@ it.each([
 	"songs-2000s",
 	"songs-2010s",
 	"songs-2020s",
+	"hit-songs",
+	"pop-hits",
+	"rock-hits",
+	"dance-edm",
 ])(
 	"plays a real song clip from %s with a theme-specific answer list",
 	async (theme) => {

@@ -1,5 +1,7 @@
+import { hitSongSelections } from "./hit-song-selections";
+
 // shortcut: Array positions are persistent answer IDs; append tracks, or migrate IDs before reordering.
-export const songPacks = {
+const baseSongPacks = {
 	// 300 Deezer recordings; append only so existing answer IDs remain stable.
 	kpop: [
 		[3907717261, "SWIM", "BTS"],
@@ -2381,4 +2383,26 @@ export const songPacks = {
 		[905162642, "midnight love", "girl in red"],
 		[1844690437, "sugar at the bottom", "Hayley Kiyoko"],
 	],
+} as const;
+
+type Recording = readonly [number, string, string];
+const recordings = new Map<number, Recording>();
+for (const pack of Object.values(baseSongPacks))
+	for (const recording of pack) recordings.set(Number(recording[0]), recording);
+
+// Resolve pinned IDs against the sourced catalog; fail startup rather than invent metadata.
+function selectRecordings(ids: readonly number[]): readonly Recording[] {
+	return ids.map((id) => {
+		const recording = recordings.get(id);
+		if (!recording) throw new Error(`Unknown curated song recording: ${id}`);
+		return recording;
+	});
+}
+
+export const songPacks = {
+	...baseSongPacks,
+	"hit-songs": selectRecordings(hitSongSelections["hit-songs"]),
+	"pop-hits": selectRecordings(hitSongSelections["pop-hits"]),
+	"rock-hits": selectRecordings(hitSongSelections["rock-hits"]),
+	"dance-edm": selectRecordings(hitSongSelections["dance-edm"]),
 } as const;
