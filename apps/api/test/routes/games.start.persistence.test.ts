@@ -17,6 +17,7 @@ describe("starting a game with PostgreSQL semantics", () => {
 			"005_game_completion.sql",
 			"006_question_topics.sql",
 			"007_puzzle_rounds.sql",
+			"013_expanded_quiz_topics.sql",
 		]) {
 			const migration = await readFile(
 				new URL(`../../migrations/${migrationName}`, import.meta.url),

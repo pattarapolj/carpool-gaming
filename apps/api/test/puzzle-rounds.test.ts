@@ -765,6 +765,7 @@ it.each(
 	},
 );
 
+// This integration case submits every question in the expanded 300-question pack.
 it("keeps skipped puzzles reachable after exhausting a pack and never counts a solve twice", async () => {
 	const { id, tokens } = await setup("animals", "TRIVIA", 1);
 	let view = (await snapshot(id, tokens[0])).puzzles;
@@ -807,7 +808,7 @@ it("keeps skipped puzzles reachable after exhausting a pack and never counts a s
 			})
 		).statusCode,
 	).toBe(422);
-});
+}, 30000);
 
 it("reassigns chooser roles after a car leaves and caps the final round at the two-hour deadline", async () => {
 	const { id, tokens } = await setup();

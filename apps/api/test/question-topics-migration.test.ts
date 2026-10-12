@@ -38,7 +38,7 @@ it("upgrades existing games and questions without changing released content, and
 		).toBe(true);
 		await db.exec(migration);
 		expect((await db.query("SELECT selected_topics FROM games")).rows).toEqual([
-			{ selected_topics: [...QuestionTopicIds] },
+			{ selected_topics: QuestionTopicIds.slice(0, 13) },
 		]);
 		const upgraded = (
 			await db.query<Record<string, unknown>>(
@@ -52,10 +52,17 @@ it("upgrades existing games and questions without changing released content, and
 				return question;
 			}),
 		).toEqual(legacy);
+		for (const entry of migrations.filter(
+			(m) => m.name > "006_question_topics.sql",
+		))
+			await db.exec(entry.sql);
+		expect((await db.query("SELECT selected_topics FROM games")).rows).toEqual([
+			{ selected_topics: QuestionTopicIds.slice(0, 13) },
+		]);
 		await db.exec(seed);
 		expect(
 			(await db.query("SELECT count(*)::int AS count FROM questions")).rows,
-		).toEqual([{ count: 325 }]);
+		).toEqual([{ count: 5100 }]);
 		await db.exec(
 			"INSERT INTO games(id,name,join_code,host_token_hash,round_interval_seconds) VALUES('22222222-2222-4222-8222-222222222222','New legacy caller','NEWOLD','hash',300)",
 		);
