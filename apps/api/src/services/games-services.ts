@@ -8,8 +8,13 @@ import {
 	QuestionTopicIds,
 	type StartedGame,
 } from "../../../../packages/contracts/src/index";
+import type { PuzzleSetup } from "../../../../packages/contracts/src/puzzles";
 import { type GameDb, hashToken, type QueryDb, type Session } from "./auth";
-import { getPuzzleView } from "./puzzle-service";
+import {
+	getPuzzleView,
+	prepareSongRound,
+	type SongPreviewLogger,
+} from "./puzzle-service";
 import {
 	getLeaderboard,
 	getRoundResults,
@@ -251,10 +256,20 @@ export async function startGameTransition(
 	practice: boolean,
 	session: Session,
 	db: GameDb,
+	log?: SongPreviewLogger,
 ) {
-	return db.transaction((transactionDb) =>
+	const result = await db.transaction((transactionDb) =>
 		performStartGame(gameId, practice, session, transactionDb),
 	);
+	if (result.prepare) {
+		const ids = await prepareSongRound(result.prepare.theme, db, log);
+		const committed = await db.transaction((tx) =>
+			performStartGame(gameId, practice, session, tx, ids),
+		);
+		if (committed.prepare) throw new Error("Song preparation missing");
+		return committed;
+	}
+	return result;
 }
 
 async function performStartGame(
@@ -262,18 +277,23 @@ async function performStartGame(
 	practice: boolean,
 	session: Session,
 	db: QueryDb,
+	preparedIds?: string[],
 ) {
 	if (!isUuid(gameId)) {
 		throw new GameStartError(404, "GAME_NOT_FOUND", "Game not found");
 	}
 
 	const gameResult = (await db.query(
-		`SELECT id, status
+		`SELECT id, status, puzzle_setup
 		 FROM games
 		 WHERE id = $1
 		 FOR UPDATE`,
 		[gameId],
-	)) as QueryResult<{ id: string; status: string }>;
+	)) as QueryResult<{
+		id: string;
+		status: string;
+		puzzle_setup?: PuzzleSetup | null;
+	}>;
 	const game = gameResult.rows[0];
 
 	if (!game) {
@@ -304,6 +324,8 @@ async function performStartGame(
 		);
 	}
 
+	if (game.puzzle_setup?.format === "MUSIC" && !preparedIds)
+		return { prepare: game.puzzle_setup };
 	const now = new Date();
 	await db.query(
 		`UPDATE games
@@ -312,7 +334,13 @@ async function performStartGame(
 		 RETURNING id, status, started_at AS "startedAt", next_round_at AS "nextRoundAt"`,
 		[gameId, now],
 	);
-	const transition = await openGameInTransaction(gameId, db, () => now);
+	const transition = await openGameInTransaction(
+		gameId,
+		db,
+		() => now,
+		false,
+		preparedIds,
+	);
 	const committed = (await db.query(
 		'SELECT id,status,started_at AS "startedAt",next_round_at AS "nextRoundAt" FROM games WHERE id=$1',
 		[gameId],

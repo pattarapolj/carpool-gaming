@@ -281,23 +281,17 @@ function GuessPuzzle({
 						alt="Partially revealed mystery animal"
 					/>
 				) : null}
-				{format === "MUSIC" && puzzle.media?.startsWith("song-clip:") ? (
+				{format === "MUSIC" && puzzle.media && !puzzle.revealedAnswer ? (
 					<SongClip
 						key={`${puzzle.id}:${puzzle.media}`}
 						session={session}
 						puzzleId={puzzle.id}
-						seconds={puzzle.media.slice(10)}
+						source={puzzle.media}
+						disabled={disabled}
+						onSkip={() =>
+							void onAction({ kind: "skip", roundId, puzzleId: puzzle.id })
+						}
 					/>
-				) : format === "MUSIC" && puzzle.media ? (
-					<audio
-						key={puzzle.media}
-						controls
-						preload="metadata"
-						src={puzzle.media}
-					>
-						<track kind="captions" />
-						Your browser cannot play this clip.
-					</audio>
 				) : null}
 			</div>
 			{puzzle.revealedAnswer ? (
@@ -458,11 +452,15 @@ function GuessPuzzle({
 function SongClip({
 	session,
 	puzzleId,
-	seconds,
+	source,
+	disabled,
+	onSkip,
 }: {
 	session?: GameSession;
 	puzzleId: string;
-	seconds: string;
+	source: string;
+	disabled: boolean;
+	onSkip: () => void;
 }) {
 	const [media, setMedia] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -472,7 +470,8 @@ function SongClip({
 		let active = true;
 		setMedia(null);
 		setError(null);
-		if (session)
+		if (!source.startsWith("song-clip:")) setMedia(source);
+		else if (session)
 			void getSongClip(session, puzzleId)
 				.then((clip) => {
 					if (active) setMedia(clip);
@@ -482,32 +481,36 @@ function SongClip({
 						setError(
 							reason instanceof Error
 								? reason.message
-								: "Song clip unavailable.",
+								: "Song clip unavailable. Retry or skip this song.",
 						);
 				});
+		else setError("Sign in to load the song clip, or skip this song.");
 		return () => {
 			active = false;
 		};
-	}, [session, puzzleId, retry]);
+	}, [session, puzzleId, source, retry]);
 	return (
 		<div>
-			<p>{seconds}-second clip · Preview supplied by Deezer</p>
+			{source.startsWith("song-clip:") ? (
+				<p>{source.slice(10)}-second clip · Preview supplied by Deezer</p>
+			) : null}
 			{media ? (
 				<audio
-					controls
+					controls={!disabled}
 					preload="metadata"
 					src={media}
-					onError={() =>
+					onError={() => {
+						setMedia(null);
 						setError(
-							"Cannot play this clip. Retry or give up to reveal the song.",
-						)
-					}
+							"Your browser cannot play this clip. Retry or skip this song.",
+						);
+					}}
 				>
 					<track kind="captions" />
 					Your browser cannot play this clip.
 				</audio>
 			) : !error ? (
-				<p role="status">Loading song clip…</p>
+				<p role="status">Preparing song clip…</p>
 			) : null}
 			{error ? (
 				<>
@@ -515,9 +518,26 @@ function SongClip({
 					<button
 						type="button"
 						className="quiet-button"
-						onClick={() => setRetry(retry + 1)}
+						disabled={disabled}
+						onClick={() => setRetry((attempt) => attempt + 1)}
 					>
 						Retry song clip
+					</button>
+				</>
+			) : null}
+			{!media ? (
+				<>
+					<p>
+						Skip if needed. Skipping earns 0 points and does not reveal the
+						song. You can revisit it while time remains.
+					</p>
+					<button
+						type="button"
+						className="quiet-button"
+						disabled={disabled}
+						onClick={onSkip}
+					>
+						Skip unavailable song
 					</button>
 				</>
 			) : null}

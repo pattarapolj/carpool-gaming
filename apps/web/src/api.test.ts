@@ -3,13 +3,96 @@ import {
 	ApiError,
 	createGame,
 	getSongClip,
+	sendPuzzleAction,
 	startGame,
 	submitAnswer,
 } from "./api";
 import { session } from "./test/game-fixtures";
 
 describe("lobby API client", () => {
-	afterEach(() => vi.unstubAllGlobals());
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+	});
+	it("allows server preview retries to finish before the clip request times out", async () => {
+		vi.useFakeTimers();
+		vi.spyOn(AbortSignal, "timeout").mockImplementation((milliseconds) => {
+			const controller = new AbortController();
+			setTimeout(() => controller.abort(), milliseconds);
+			return controller.signal;
+		});
+		vi.stubGlobal(
+			"fetch",
+			(_path: string, init: RequestInit) =>
+				new Promise<Response>((resolve, reject) => {
+					const timer = setTimeout(
+						() =>
+							resolve(
+								Response.json({ media: "data:audio/wav;base64,UklGRg==" }),
+							),
+						26000,
+					);
+					init.signal?.addEventListener("abort", () => {
+						clearTimeout(timer);
+						reject(init.signal?.reason);
+					});
+				}),
+		);
+		const result = getSongClip(session, "song-0");
+		const settled = result.catch((error: unknown) => error);
+		await vi.advanceTimersByTimeAsync(26000);
+		expect(await settled).toBe("data:audio/wav;base64,UklGRg==");
+	});
+	it.each(["start", "format"])(
+		"allows song preparation to finish before %s times out",
+		async (operation) => {
+			vi.useFakeTimers();
+			vi.spyOn(AbortSignal, "timeout").mockImplementation((milliseconds) => {
+				const controller = new AbortController();
+				setTimeout(() => controller.abort(), milliseconds);
+				return controller.signal;
+			});
+			const game = {
+				id: session.gameId,
+				status: "COMPLETE",
+				startedAt: "2026-10-08T10:00:00.000Z",
+				nextRoundAt: null,
+			};
+			vi.stubGlobal(
+				"fetch",
+				(_path: string, init: RequestInit) =>
+					new Promise<Response>((resolve, reject) => {
+						const timer = setTimeout(
+							() =>
+								resolve(
+									Response.json(
+										operation === "start" ? { game } : { ok: true },
+									),
+								),
+							26000,
+						);
+						init.signal?.addEventListener("abort", () => {
+							clearTimeout(timer);
+							reject(init.signal?.reason);
+						});
+					}),
+			);
+			const result =
+				operation === "start"
+					? startGame(session, false)
+					: sendPuzzleAction(session, {
+							kind: "format",
+							roundId: "a6775a41-50ab-4d61-b1fa-f9f07a28c62b",
+							format: "MUSIC",
+						});
+			const settled = result.catch((error: unknown) => error);
+			await vi.advanceTimersByTimeAsync(26000);
+			expect(await settled).toEqual(
+				operation === "start" ? { game } : { ok: true },
+			);
+		},
+	);
 	it("validates the song clip request before sending it", async () => {
 		const fetchMock = vi.fn(async () =>
 			Response.json({ media: "data:audio/wav;base64,UklGRg==" }),

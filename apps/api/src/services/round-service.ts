@@ -191,6 +191,7 @@ async function openLockedGame(
 	tx: QueryDb,
 	clock: Clock,
 	immediate = false,
+	preparedIds?: string[],
 ) {
 	const games = (await tx.query(
 		"SELECT status,started_at,next_round_at,round_interval_seconds,selected_topics,puzzle_setup FROM games WHERE id::text=$1 FOR UPDATE",
@@ -230,6 +231,7 @@ async function openLockedGame(
 			),
 			tx,
 			now,
+			preparedIds,
 		);
 		return { opened: null, completion: null };
 	}
