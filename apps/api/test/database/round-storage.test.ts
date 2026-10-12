@@ -25,7 +25,7 @@ afterAll(async () => {
 	if (db) await db.close();
 });
 
-it("loads the 5,100-question bank with valid topics, windows and typed keys", async () => {
+it("loads the 5,400-question bank with valid topics, windows and typed keys", async () => {
 	const seed = await readFile(
 		new URL("../../seeds/questions.sql", import.meta.url),
 		"utf8",
@@ -44,7 +44,7 @@ it("loads the 5,100-question bank with valid topics, windows and typed keys", as
 	}>(
 		"SELECT id, type, choices, correct_answer, source_title, source_url, is_active, topic_id, answer_window_seconds FROM questions ORDER BY id",
 	);
-	expect(rows).toHaveLength(5100);
+	expect(rows).toHaveLength(5400);
 	for (const topic of [
 		"world",
 		"thailand",
@@ -63,6 +63,7 @@ it("loads the 5,100-question bank with valid topics, windows and typed keys", as
 		"history",
 		"sports",
 		"video-games",
+		"nba",
 	]) {
 		const topicRows = rows.filter((row) => row.topic_id === topic);
 		expect(topicRows, `${topic} bank size`).toHaveLength(300);
@@ -147,7 +148,7 @@ it("loads the 5,100-question bank with valid topics, windows and typed keys", as
 		"10000000-0000-4000-8000-000000000002",
 		"10000000-0000-4000-8000-000000000003",
 	]);
-	expect(new Set(content.map((row) => row.prompt)).size).toBe(5100);
+	expect(new Set(content.map((row) => row.prompt)).size).toBe(5400);
 	for (const row of content) {
 		expect(row.prompt.trim()).not.toBe("");
 		expect(row.explanation.trim()).not.toBe("");

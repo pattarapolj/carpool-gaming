@@ -7,7 +7,7 @@ import {
 } from "../src";
 
 describe("CreateGameSchema", () => {
-	it("defines exactly the 17 selectable topic IDs and their display names", () => {
+	it("defines exactly the 18 selectable topic IDs and their display names", () => {
 		expect(QUESTION_TOPICS).toEqual({
 			world: "Around the World",
 			thailand: "Thailand",
@@ -26,6 +26,7 @@ describe("CreateGameSchema", () => {
 			history: "History",
 			sports: "Sports",
 			"video-games": "Video Games",
+			nba: "NBA",
 		});
 		for (const id of Object.keys(QUESTION_TOPICS))
 			expect(QuestionTopicSchema.parse(id)).toBe(id);
@@ -59,7 +60,7 @@ describe("CreateGameSchema", () => {
 		).toBe(false);
 	});
 
-	it("defaults omitted topics to all 17 selectable topics", () => {
+	it("defaults omitted topics to all 18 selectable topics", () => {
 		expect(
 			CreateGameSchema.parse({ name: "Trip", roundIntervalSeconds: 300 }),
 		).toMatchObject({
@@ -81,6 +82,7 @@ describe("CreateGameSchema", () => {
 				"history",
 				"sports",
 				"video-games",
+				"nba",
 			],
 		});
 	});

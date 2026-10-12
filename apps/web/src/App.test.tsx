@@ -195,6 +195,7 @@ it("creates with named topic selections and labels the full selection Mixed Topi
 		"History",
 		"Sports",
 		"Video Games",
+		"NBA",
 	]) {
 		fireEvent.click(screen.getByRole("checkbox", { name: topic }));
 	}
@@ -235,6 +236,7 @@ it("prevents creating a game with no selected topics", () => {
 		"History",
 		"Sports",
 		"Video Games",
+		"NBA",
 	]) {
 		fireEvent.click(screen.getByRole("checkbox", { name: topic }));
 	}
