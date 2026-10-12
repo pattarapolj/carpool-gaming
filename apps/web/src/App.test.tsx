@@ -191,6 +191,10 @@ it("creates with named topic selections and labels the full selection Mixed Topi
 		"Lateral Thinking",
 		"Probability Puzzles",
 		"Closest Estimate",
+		"Harry Potter (seven-book spoilers)",
+		"History",
+		"Sports",
+		"Video Games",
 	]) {
 		fireEvent.click(screen.getByRole("checkbox", { name: topic }));
 	}
@@ -227,6 +231,10 @@ it("prevents creating a game with no selected topics", () => {
 		"Lateral Thinking",
 		"Probability Puzzles",
 		"Closest Estimate",
+		"Harry Potter (seven-book spoilers)",
+		"History",
+		"Sports",
+		"Video Games",
 	]) {
 		fireEvent.click(screen.getByRole("checkbox", { name: topic }));
 	}

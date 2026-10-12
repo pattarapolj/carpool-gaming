@@ -657,22 +657,23 @@ it("returns immediate correct and incorrect feedback before advancing puzzles", 
 	);
 });
 
-it("shuffles every supported pack without duplicates", async () => {
+it.each(
+	PUZZLE_PACKS.flatMap((pack) =>
+		pack.formats.map((format) => ({ theme: pack.id, format })),
+	),
+)("shuffles $theme/$format without duplicates", async ({ theme, format }) => {
 	vi.mocked(crypto.randomInt).mockImplementation(() => 0);
-	for (const pack of PUZZLE_PACKS)
-		for (const format of pack.formats) {
-			const { id, tokens } = await setup(pack.id, format, 1);
-			const view = (await snapshot(id, tokens[0])).puzzles;
-			const expected = catalog
-				.filter((p) => !p.legacy && p.theme === pack.id && p.format === format)
-				.map((p) => p.id);
-			const { rows } = await db.query<{ puzzle_ids: string[] }>(
-				"SELECT puzzle_ids FROM puzzle_rounds WHERE id=$1",
-				[view.round.id],
-			);
-			expect([...rows[0].puzzle_ids].sort()).toEqual([...expected].sort());
-			expect(rows[0].puzzle_ids).not.toEqual(expected);
-		}
+	const { id, tokens } = await setup(theme, format, 1);
+	const view = (await snapshot(id, tokens[0])).puzzles;
+	const expected = catalog
+		.filter((p) => !p.legacy && p.theme === theme && p.format === format)
+		.map((p) => p.id);
+	const { rows } = await db.query<{ puzzle_ids: string[] }>(
+		"SELECT puzzle_ids FROM puzzle_rounds WHERE id=$1",
+		[view.round.id],
+	);
+	expect([...rows[0].puzzle_ids].sort()).toEqual([...expected].sort());
+	expect(rows[0].puzzle_ids).not.toEqual(expected);
 });
 
 it("validates guesses, rejects cross-game tokens and stops expired and departed teams", async () => {
@@ -765,6 +766,7 @@ it.each(
 	},
 );
 
+// This integration case submits every question in the expanded 300-question pack.
 it("keeps skipped puzzles reachable after exhausting a pack and never counts a solve twice", async () => {
 	const { id, tokens } = await setup("animals", "TRIVIA", 1);
 	let view = (await snapshot(id, tokens[0])).puzzles;
@@ -807,7 +809,7 @@ it("keeps skipped puzzles reachable after exhausting a pack and never counts a s
 			})
 		).statusCode,
 	).toBe(422);
-});
+}, 30000);
 
 it("reassigns chooser roles after a car leaves and caps the final round at the two-hour deadline", async () => {
 	const { id, tokens } = await setup();

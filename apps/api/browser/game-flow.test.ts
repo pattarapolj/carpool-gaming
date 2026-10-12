@@ -860,22 +860,11 @@ it("restores a Science-only selection and plays two phones only from that topic"
 		);
 		await host.page.goto(harness.url);
 		await host.page.getByText("Quiz topics", { exact: true }).click();
-		for (const topic of [
-			"Around the World",
-			"Thailand",
-			"Food & Drinks",
-			"Weird but True",
-			"Animals & Nature",
-			"Taylor Swift",
-			"Breaking Bad (full-series spoilers)",
-			"Marvel (MCU film spoilers)",
-			"Logic & Clever Strategies",
-			"Lateral Thinking",
-			"Probability Puzzles",
-			"Closest Estimate",
-		]) {
-			await host.page.getByRole("checkbox", { name: topic }).uncheck();
-		}
+		for (const topic of await host.page.getByRole("checkbox").all())
+			await topic.uncheck();
+		await host.page
+			.getByRole("checkbox", { name: "Science & Space", exact: true })
+			.check();
 		await host.page.getByLabel("Game name").fill("Science-only convoy");
 		await host.page.getByLabel("Car name").fill("Host car");
 		await host.page.getByRole("button", { name: "Create game" }).click();

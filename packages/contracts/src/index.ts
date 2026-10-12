@@ -17,6 +17,10 @@ export const QuestionTopicIds = [
 	"lateral",
 	"probability",
 	"estimate",
+	"harry-potter",
+	"history",
+	"sports",
+	"video-games",
 ] as const;
 export const QuestionTopicSchema = z.enum(QuestionTopicIds);
 export type QuestionTopicId = z.infer<typeof QuestionTopicSchema>;
@@ -34,6 +38,10 @@ export const QUESTION_TOPICS = {
 	lateral: "Lateral Thinking",
 	probability: "Probability Puzzles",
 	estimate: "Closest Estimate",
+	"harry-potter": "Harry Potter (seven-book spoilers)",
+	history: "History",
+	sports: "Sports",
+	"video-games": "Video Games",
 } satisfies Record<QuestionTopicId, string>;
 const SelectedTopicsSchema = z
 	.array(QuestionTopicSchema)

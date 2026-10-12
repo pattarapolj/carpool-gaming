@@ -1,6 +1,18 @@
 # Question bank review
 
-## Scope and audit
+## Expanded bank (2026-10-12)
+
+The current scheduled bank has 5,100 questions: 300 in each of 17 topics. Harry Potter covers the seven original books and includes spoilers; History, Sports and Video Games are also newly selectable. The original 325 rows and IDs remain unchanged. Each supplement uses new deterministic UUIDs and `ON CONFLICT (id) DO NOTHING`. Migration 013 accepts the new topics and updates new-game defaults without changing existing saved selections.
+
+The database test validates counts per topic, unique prompts and IDs, answer types, distinct choices, keyed answers, nonempty explanations and attribution, 60/180-second windows, and idempotent reseeding. These structural checks do not establish that every factual answer or reference URL has been independently verified.
+
+Geography draws on country capital/continent datasets and Thai province/district data; science combines periodic-table data with broader scientific concepts. Food covers culinary traditions and preparation; nature and weird topics cover animal, botanical and scientific facts. History, sports and games cover named events, competitors and titles. Mathematical questions include worked solutions; an independent review recomputed all 275 new probability answers and 275 estimate answers. Related mathematical families use varied constraints and parameters.
+
+Breaking Bad supplements include episode season, director and writing-credit facts from fetched TVmaze episode data and Wikipedia credit tables, plus original character and plot trivia.
+
+Sources identify the relevant reference subject or original work. Individual Wikipedia, Britannica and other reference pages were not all fetched or independently audited during this expansion. The historical source-review claims below apply to the original release only. Song metadata provenance and preview-access limits are recorded in [song-bank-sources.md](../song-bank-sources.md).
+
+## Original 325-question release audit
 
 This first selectable release contains 325 questions: the 24 previously released astronomy questions, one additional Science & Space question, and 25 questions in each of the other 12 topics. The released 24 rows remain unchanged in `apps/api/seeds/questions.sql`; the new insert follows them and uses new UUIDs. Both inserts use `ON CONFLICT (id) DO NOTHING`, so reseeding does not replace a played or edited row.
 

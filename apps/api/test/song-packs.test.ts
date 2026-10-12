@@ -3,11 +3,10 @@ import { catalog } from "../src/services/puzzle-catalog";
 import { songPacks } from "../src/services/song-packs";
 
 it.each(["melodies", "songs-2000s", "songs-2010s", "songs-2020s"] as const)(
-	"offers 60–100 distinct recordings in %s",
+	"offers exactly 300 distinct recordings in %s",
 	(theme) => {
 		const pack = songPacks[theme];
-		expect(pack.length).toBeGreaterThanOrEqual(60);
-		expect(pack.length).toBeLessThanOrEqual(100);
+		expect(pack).toHaveLength(300);
 		expect(new Set(pack.map(([id]) => id)).size).toBe(pack.length);
 		expect(
 			new Set(

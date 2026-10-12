@@ -7,7 +7,7 @@ import {
 } from "../src";
 
 describe("CreateGameSchema", () => {
-	it("defines exactly the 13 selectable topic IDs and their display names", () => {
+	it("defines exactly the 17 selectable topic IDs and their display names", () => {
 		expect(QUESTION_TOPICS).toEqual({
 			world: "Around the World",
 			thailand: "Thailand",
@@ -22,6 +22,10 @@ describe("CreateGameSchema", () => {
 			lateral: "Lateral Thinking",
 			probability: "Probability Puzzles",
 			estimate: "Closest Estimate",
+			"harry-potter": "Harry Potter (seven-book spoilers)",
+			history: "History",
+			sports: "Sports",
+			"video-games": "Video Games",
 		});
 		for (const id of Object.keys(QUESTION_TOPICS))
 			expect(QuestionTopicSchema.parse(id)).toBe(id);
@@ -55,7 +59,7 @@ describe("CreateGameSchema", () => {
 		).toBe(false);
 	});
 
-	it("defaults omitted topics to all 13 selectable topics", () => {
+	it("defaults omitted topics to all 17 selectable topics", () => {
 		expect(
 			CreateGameSchema.parse({ name: "Trip", roundIntervalSeconds: 300 }),
 		).toMatchObject({
@@ -73,6 +77,10 @@ describe("CreateGameSchema", () => {
 				"lateral",
 				"probability",
 				"estimate",
+				"harry-potter",
+				"history",
+				"sports",
+				"video-games",
 			],
 		});
 	});
