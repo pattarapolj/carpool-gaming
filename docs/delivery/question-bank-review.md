@@ -2,7 +2,7 @@
 
 ## Expanded bank (2026-10-12)
 
-The current scheduled bank has 5,100 questions: 300 in each of 17 topics. Harry Potter covers the seven original books and includes spoilers; History, Sports and Video Games are also newly selectable. The original 325 rows and IDs remain unchanged. Each supplement uses new deterministic UUIDs and `ON CONFLICT (id) DO NOTHING`. Migration 013 accepts the new topics and updates new-game defaults without changing existing saved selections.
+The current scheduled bank has 5,400 questions: 300 in each of 18 topics. Harry Potter covers the seven original books and includes spoilers; History, Sports and Video Games are also newly selectable. The original 325 rows and IDs remain unchanged. Each supplement uses new deterministic UUIDs and `ON CONFLICT (id) DO NOTHING`. NBA adds 300 questions about players, teams, history, awards and rules, with specific seasons named for dated achievements. Its sources and verification limits are recorded in [the NBA source audit](../nba-bank-sources.md). Migration 014 adds NBA while preserving saved selections. Migration 013 accepts the earlier new topics and updates new-game defaults without changing existing saved selections.
 
 The database test validates counts per topic, unique prompts and IDs, answer types, distinct choices, keyed answers, nonempty explanations and attribution, 60/180-second windows, and idempotent reseeding. These structural checks do not establish that every factual answer or reference URL has been independently verified.
 

@@ -21,6 +21,7 @@ export const QuestionTopicIds = [
 	"history",
 	"sports",
 	"video-games",
+	"nba",
 ] as const;
 export const QuestionTopicSchema = z.enum(QuestionTopicIds);
 export type QuestionTopicId = z.infer<typeof QuestionTopicSchema>;
@@ -42,6 +43,7 @@ export const QUESTION_TOPICS = {
 	history: "History",
 	sports: "Sports",
 	"video-games": "Video Games",
+	nba: "NBA",
 } satisfies Record<QuestionTopicId, string>;
 const SelectedTopicsSchema = z
 	.array(QuestionTopicSchema)

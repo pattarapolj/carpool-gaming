@@ -145,7 +145,7 @@ async function main() {
 		assert.equal(
 			(await control.query(`SELECT count(*) FROM ${schema}.questions`)).rows[0]
 				.count,
-			"5100",
+			"5400",
 		);
 		assert.deepEqual(
 			(
@@ -249,7 +249,7 @@ async function main() {
 		assert.equal(
 			(await control.query(`SELECT count(*) FROM ${schema}.questions`)).rows[0]
 				.count,
-			"5100",
+			"5400",
 		);
 		await assert.rejects(
 			db.query("UPDATE answers SET value='false' WHERE id=$1", [answerId]),
