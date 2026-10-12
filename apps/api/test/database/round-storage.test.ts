@@ -42,7 +42,7 @@ it("loads the 5,400-question bank with valid topics, windows and typed keys", as
 		topic_id: string;
 		answer_window_seconds: number;
 	}>(
-		"SELECT id, type, choices, correct_answer, source_title, source_url, is_active, topic_id, answer_window_seconds FROM questions ORDER BY id",
+		"SELECT id, type, choices, correct_answer, source_title, source_url, is_active, topic_id, answer_window_seconds FROM questions WHERE is_active ORDER BY id",
 	);
 	expect(rows).toHaveLength(5400);
 	for (const topic of [
@@ -93,9 +93,13 @@ it("loads the 5,400-question bank with valid topics, windows and typed keys", as
 		}
 	}
 	const answerPositionCounts = [0, 0, 0, 0];
-	for (const row of rows.filter(
-		(row) => row.id.startsWith("20000000-") && row.type === "MULTIPLE_CHOICE",
-	)) {
+	// Audit the complete original release, including now-archived versions.
+	const originalRelease = (
+		await db.query<{ id: string; choices: string[]; correct_answer: string }>(
+			"SELECT id,choices,correct_answer FROM questions WHERE id::text LIKE '20000000-%' AND type='MULTIPLE_CHOICE'",
+		)
+	).rows;
+	for (const row of originalRelease) {
 		const position = row.choices?.indexOf(String(row.correct_answer)) ?? -1;
 		expect(position, `answer position for ${row.id}`).toBeGreaterThanOrEqual(0);
 		answerPositionCounts[position] += 1;
@@ -140,7 +144,7 @@ it("loads the 5,400-question bank with valid topics, windows and typed keys", as
 	]);
 	const content = (
 		await db.query<{ id: string; prompt: string; explanation: string }>(
-			"SELECT id,prompt,explanation FROM questions ORDER BY id",
+			"SELECT id,prompt,explanation FROM questions WHERE is_active ORDER BY id",
 		)
 	).rows;
 	expect(content.slice(0, 3).map((row) => row.id)).toEqual([
