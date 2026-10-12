@@ -57,6 +57,10 @@ it.each([
 	"songs-2000s",
 	"songs-2010s",
 	"songs-2020s",
+	"hit-songs",
+	"pop-hits",
+	"rock-hits",
+	"dance-edm",
 ])("accepts %s for opening and subsequent song rounds only", (theme) => {
 	expect(
 		CreateGameSchema.safeParse({

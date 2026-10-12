@@ -25,9 +25,17 @@ export const PuzzleThemeSchema = z.enum([
 	"songs-2000s",
 	"songs-2010s",
 	"songs-2020s",
+	"hit-songs",
+	"pop-hits",
+	"rock-hits",
+	"dance-edm",
 ]);
 export const PUZZLE_PACKS = [
 	{ id: "animals", name: "Animals", formats: ["PICTURE", "TRIVIA"] },
+	{ id: "hit-songs", name: "Hit Songs · 300 songs", formats: ["MUSIC"] },
+	{ id: "pop-hits", name: "Pop Hits · 150 songs", formats: ["MUSIC"] },
+	{ id: "rock-hits", name: "Rock Hits · 100 songs", formats: ["MUSIC"] },
+	{ id: "dance-edm", name: "Dance & EDM · 100 songs", formats: ["MUSIC"] },
 	{ id: "kpop", name: "K-pop · 300 songs", formats: ["MUSIC"] },
 	{ id: "melodies", name: "International ’90s songs", formats: ["MUSIC"] },
 	{ id: "songs-2000s", name: "International 2000s songs", formats: ["MUSIC"] },

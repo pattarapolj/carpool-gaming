@@ -102,8 +102,49 @@ async function main() {
 		);
 		const stored = (await control.query(`SELECT * FROM ${schema}.answers`))
 			.rows;
+		// Upgrade a stored music round through the new theme constraints.
+		const hitThemeMigrationIndex = migrations.findIndex(
+			(migration) => migration.name === "016_hit_song_themes.sql",
+		);
+		assert(hitThemeMigrationIndex > 0);
+		await migrate(db, migrations.slice(0, hitThemeMigrationIndex));
+		const songRoundId = randomUUID();
+		await db.query(
+			"INSERT INTO puzzle_rounds(id,game_id,sequence,theme,format,starts_at,ends_at,puzzle_ids,next_theme) VALUES($1,$2,1,'melodies','MUSIC',now(),now()+interval '300 seconds',ARRAY['hit-0','hit-1'],'songs-2010s')",
+			[songRoundId, gameId],
+		);
+		const storedSong = (
+			await control.query(`SELECT * FROM ${schema}.puzzle_rounds WHERE id=$1`, [
+				songRoundId,
+			])
+		).rows;
 		await migrate(db, migrations);
 		await migrate(db, migrations);
+		assert.deepEqual(
+			(
+				await control.query(
+					`SELECT * FROM ${schema}.puzzle_rounds WHERE id=$1`,
+					[songRoundId],
+				)
+			).rows,
+			storedSong,
+		);
+		for (const theme of ["hit-songs", "pop-hits", "rock-hits", "dance-edm"]) {
+			await db.query(
+				"UPDATE puzzle_rounds SET theme=$1,next_theme=$1 WHERE id=$2",
+				[theme, songRoundId],
+			);
+			const updated = (
+				await control.query(
+					`SELECT theme,next_theme,puzzle_ids FROM ${schema}.puzzle_rounds WHERE id=$1`,
+					[songRoundId],
+				)
+			).rows[0];
+			assert.equal(updated.theme, theme);
+			assert.equal(updated.next_theme, theme);
+			assert.deepEqual(updated.puzzle_ids, ["hit-0", "hit-1"]);
+		}
+
 		assert.deepEqual(
 			(
 				await control.query(

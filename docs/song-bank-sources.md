@@ -34,6 +34,12 @@ Catalog remaster editions below use the original recording release years shown i
 
 ISRC year fields were used to find candidate recordings and then reviewed against original album or single releases. ISRC allocation years and catalog reissue dates are not reliable release dates on their own. For example, *Gasolina*, *American Boy*, *Stupid Love*, *Boys Will Be Boys* and *All Night* were excluded from incorrectly suggested decades. Later catalog editions of original recordings remain in their original decade. Remixes, live versions, sped-up edits, tribute performers and duplicate title/artist combinations were excluded from new entries.
 
+## Curated hit categories
+
+Hit Songs (300), Pop Hits (150), Rock Hits (100), and Dance & EDM (100) reuse exact recording IDs, titles and artists from the existing banks. The pinned selections live in `apps/api/src/services/hit-song-selections.ts`; the original banks and their persistent answer positions are unchanged. Each category contains distinct recordings and spans the 1990s through the 2020s. Overlap between categories is intentional: a dance-pop single can appear in Hit Songs, Pop Hits and Dance & EDM, with the same cached preview and availability record.
+
+These are editorial selections of familiar singles, not certified chart rankings. Pop includes mainstream pop and R&B crossovers; Rock includes alternative rock, pop-punk and pop-rock; Dance & EDM includes club tracks, electronic music, disco and dance-pop. Smaller genre packs favor recognizable tracks over album filler. Five recordings observed unavailable during the live check were omitted (Bring It On Down, Let Me Blow Ya Mind, Super Bass, Jennifer's Body and Sinner); availability continues to change, so the runtime ledger also filters confirmed missing previews before new rounds.
+
 ## Preview availability
 
-The new IDs are sourced catalog identifiers. Current preview audio availability was not independently verified: this environment's HTTP proxy returned a destination denial for the Deezer API. The existing runtime preview lookup and availability checks continue to apply. Catalog rights and preview availability can change by territory and over time.
+The appended decade-bank IDs are sourced catalog identifiers. Their previews were not checked exhaustively when those banks were expanded: this environment's HTTP proxy denied direct Deezer API requests. The later live-server spot check described above covered only a sample, so it does not verify availability for every curated selection. The existing runtime preview lookup and availability checks continue to apply. Catalog rights and preview availability can change by territory and over time.
