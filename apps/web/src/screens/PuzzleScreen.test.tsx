@@ -1,9 +1,16 @@
 // @vitest-environment jsdom
 
 import type { PuzzleView } from "@carpool/contracts";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+	act,
+	cleanup,
+	fireEvent,
+	render,
+	screen,
+	waitFor,
+} from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { gameSnapshot } from "../test/game-fixtures";
+import { gameSnapshot, session } from "../test/game-fixtures";
 import { PuzzleScreen } from "./PuzzleScreen";
 
 const roundId = "a6775a41-50ab-4d61-b1fa-f9f07a28c62b";
@@ -325,4 +332,153 @@ it("lets passengers retry a failed song clip without losing the puzzle", async (
 		"data:audio/wav;base64,UklGRg==",
 	);
 	expect(screen.getByRole("button", { name: "Give up & reveal" })).toBeTruthy();
+});
+
+function musicView(media = "song-clip:2"): PuzzleView {
+	if (!view.puzzle) throw new Error("Missing fixture puzzle");
+	return {
+		...view,
+		round: { ...view.round, theme: "melodies", format: "MUSIC" },
+		puzzle: { ...view.puzzle, media },
+	};
+}
+function musicScreen(
+	puzzles = musicView(),
+	busy = false,
+	disconnected = false,
+	onAction = vi.fn(async () => true),
+) {
+	return (
+		<PuzzleScreen
+			session={session}
+			snapshot={{ ...gameSnapshot(), puzzles }}
+			receivedAt={performance.now()}
+			onAction={onAction}
+			busy={busy}
+			disconnected={disconnected}
+		/>
+	);
+}
+function unavailableClip() {
+	return Response.json(
+		{
+			error: {
+				code: "CLIP_TEMPORARILY_UNAVAILABLE",
+				message:
+					"Song preview is temporarily unavailable. Retry or skip this song.",
+			},
+		},
+		{ status: 503 },
+	);
+}
+it("lets passengers skip a failed preview without revealing the answer", async () => {
+	const fetchClip = vi.fn(async () => unavailableClip());
+	vi.stubGlobal("fetch", fetchClip);
+	const onAction = vi.fn(async () => true);
+	render(musicScreen(musicView(), false, false, onAction));
+	await screen.findByRole("alert");
+	fireEvent.click(
+		screen.getByRole("button", { name: "Skip unavailable song" }),
+	);
+	expect(onAction).toHaveBeenCalledWith({
+		kind: "skip",
+		roundId,
+		puzzleId: view.puzzle?.id,
+	});
+	expect(screen.queryByLabelText("Revealed song")).toBeNull();
+	expect(fetchClip).toHaveBeenCalledOnce();
+	expect(
+		screen.getByText(/Skipping earns 0 points and does not reveal/),
+	).toBeTruthy();
+});
+it.each(["song-clip:2", "data:audio/wav;base64,UklGRg=="])(
+	"removes broken audio and offers a skip after playback fails for %s",
+	async (media) => {
+		vi.stubGlobal("fetch", async () =>
+			Response.json({ media: "data:audio/wav;base64,UklGRg==" }),
+		);
+		const { container } = render(musicScreen(musicView(media)));
+		await screen.findByText("Your browser cannot play this clip.");
+		const audio = container.querySelector("audio");
+		if (!audio) throw new Error("Missing audio player");
+		fireEvent.error(audio);
+		expect(container.querySelector("audio")).toBeNull();
+		expect(
+			screen.getByRole("button", { name: "Skip unavailable song" }),
+		).toBeTruthy();
+		expect(screen.getByRole("alert").textContent).not.toMatch(
+			/give up|reveal/i,
+		);
+	},
+);
+it.each(["busy", "disconnected", "expired"])(
+	"disables recovery actions when %s",
+	async (condition) => {
+		vi.stubGlobal("fetch", async () => unavailableClip());
+		let puzzles = musicView();
+		if (condition === "expired")
+			puzzles = {
+				...puzzles,
+				round: { ...puzzles.round, endsAt: new Date(0).toISOString() },
+			};
+		render(
+			musicScreen(puzzles, condition === "busy", condition === "disconnected"),
+		);
+		await screen.findByRole("alert");
+		for (const name of [
+			"Retry song clip",
+			"Skip unavailable song",
+			"Give up & reveal",
+		]) {
+			expect(
+				(screen.getByRole("button", { name }) as HTMLButtonElement).disabled,
+			).toBe(true);
+		}
+	},
+);
+it("explains clip preparation while letting passengers move past a slow preview", () => {
+	vi.stubGlobal("fetch", () => new Promise(() => {}));
+	render(musicScreen());
+	expect(screen.getByText("Preparing song clip…")).toBeTruthy();
+	expect(
+		screen.getByRole("button", { name: "Skip unavailable song" }),
+	).toBeTruthy();
+});
+it("does not request a clip for a revealed song", () => {
+	const fetchClip = vi.fn(async () => unavailableClip());
+	vi.stubGlobal("fetch", fetchClip);
+	const music = musicView();
+	if (!music.puzzle) throw new Error("Missing fixture puzzle");
+	render(
+		musicScreen({
+			...music,
+			puzzle: { ...music.puzzle, revealedAnswer: "Dynamite — BTS" },
+		}),
+	);
+	expect(fetchClip).not.toHaveBeenCalled();
+});
+it("keeps an older request from replacing the next unlocked clue", async () => {
+	let finishFirst: ((response: Response) => void) | undefined;
+	let calls = 0;
+	vi.stubGlobal("fetch", () =>
+		++calls === 1
+			? new Promise<Response>((resolve) => {
+					finishFirst = resolve;
+				})
+			: Promise.resolve(Response.json({ media: "data:audio/wav;base64,TkVX" })),
+	);
+	const { container, rerender } = render(musicScreen());
+	rerender(musicScreen(musicView("song-clip:4")));
+	await waitFor(() =>
+		expect(container.querySelector("audio")?.getAttribute("src")).toBe(
+			"data:audio/wav;base64,TkVX",
+		),
+	);
+	await act(async () => {
+		finishFirst?.(Response.json({ media: "data:audio/wav;base64,T0xE" }));
+	});
+	expect(container.querySelector("audio")?.getAttribute("src")).toBe(
+		"data:audio/wav;base64,TkVX",
+	);
+	expect(screen.getByText(/4-second clip/)).toBeTruthy();
 });

@@ -7,7 +7,135 @@ import {
 } from "../../../../packages/contracts/src/puzzles";
 import type { GameDb, QueryDb, Session } from "./auth";
 import { catalog, clueMedia, entries, feedback } from "./puzzle-catalog";
-import { songPreview } from "./song-preview";
+import {
+	getUnavailableSongTrackIds,
+	recordSongPreviewResult,
+} from "./song-availability";
+import {
+	describeSongPreviewError,
+	songPreview,
+	warmSongPreviews,
+} from "./song-preview";
+
+export type SongPreviewLogger = (
+	details: Record<string, unknown>,
+	message: string,
+) => void;
+const puzzlesById = new Map(catalog.map((puzzle) => [puzzle.id, puzzle]));
+function trackForPuzzle(id: string) {
+	const puzzle = puzzlesById.get(id);
+	return entries[puzzle?.theme ?? ""]?.find((e) => e.id === puzzle?.answerId)
+		?.trackId;
+}
+function previewError(
+	error: unknown,
+	trackId: number,
+	log?: SongPreviewLogger,
+) {
+	const details = describeSongPreviewError(error);
+	log?.({ trackId, ...details }, "Song preview failed");
+	return new PuzzleError(
+		503,
+		details.code === "TRACK_UNAVAILABLE"
+			? "CLIP_UNAVAILABLE"
+			: details.stage === "decode"
+				? "CLIP_DECODE_FAILED"
+				: "CLIP_TEMPORARILY_UNAVAILABLE",
+		details.code === "TRACK_UNAVAILABLE"
+			? "Preview unavailable for this recording. Skip this song and revisit it later."
+			: details.stage === "decode"
+				? "Couldn't prepare this song clip. Retry or skip this song."
+				: "The song provider is temporarily unavailable. Retry or skip this song.",
+	);
+}
+
+// Prepare outside game transactions: the round timer starts only after this returns.
+export async function prepareSongRound(
+	theme: PuzzleSetup["theme"],
+	db: QueryDb,
+	log?: SongPreviewLogger,
+) {
+	let stopped = false;
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<never>((_, reject) => {
+		timer = setTimeout(() => {
+			stopped = true;
+			log?.(
+				{ code: "PREPARATION_TIMEOUT", stage: "preparation", retryable: true },
+				"Song round preparation timed out",
+			);
+			reject(
+				new PuzzleError(
+					503,
+					"CLIP_TEMPORARILY_UNAVAILABLE",
+					"Song preparation is taking too long. Try again or choose another pack.",
+				),
+			);
+		}, 30000);
+	});
+	try {
+		return await Promise.race([
+			prepareSongRoundWork(theme, db, log, () => stopped),
+			timeout,
+		]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+async function prepareSongRoundWork(
+	theme: PuzzleSetup["theme"],
+	db: QueryDb,
+	log: SongPreviewLogger | undefined,
+	stopped: () => boolean,
+) {
+	const unavailable = await getUnavailableSongTrackIds(db);
+	const ids = shuffled(
+		catalog
+			.filter(
+				(p) =>
+					!p.legacy &&
+					p.theme === theme &&
+					p.format === "MUSIC" &&
+					trackForPuzzle(p.id) !== undefined &&
+					!unavailable.has(trackForPuzzle(p.id) ?? 0),
+			)
+			.map((p) => p.id),
+	);
+	let attempts = 0;
+	while (ids.length) {
+		if (stopped()) return ids;
+		const trackId = trackForPuzzle(ids[0]);
+		if (trackId === undefined)
+			throw new PuzzleError(422, "NOT_A_SONG", "This puzzle has no song clip");
+		try {
+			await songPreview(trackId, 2);
+			if (stopped()) return ids;
+			await recordSongPreviewResult(db, trackId);
+			void warmSongPreviews(
+				ids
+					.slice(1, 3)
+					.map(trackForPuzzle)
+					.filter((id): id is number => id !== undefined),
+			);
+			return ids;
+		} catch (error) {
+			if (stopped()) throw error;
+			await recordSongPreviewResult(db, trackId, error);
+			const failure = previewError(error, trackId, log);
+			if (
+				describeSongPreviewError(error).code !== "TRACK_UNAVAILABLE" ||
+				++attempts >= 5
+			)
+				throw failure;
+			ids.shift();
+		}
+	}
+	throw new PuzzleError(
+		503,
+		"PACK_UNAVAILABLE",
+		"No playable previews are currently available in this pack. Choose another pack or try again later.",
+	);
+}
 
 type Rows<T> = { rows: T[] };
 type Round = {
@@ -68,15 +196,32 @@ async function openRound(
 	seconds: number,
 	tx: QueryDb,
 	now: Date,
+	preparedIds?: string[],
 ) {
-	const ids = shuffled(
-		catalog
-			.filter(
-				(p) =>
-					!p.legacy && p.theme === setup.theme && p.format === setup.format,
-			)
-			.map((p) => p.id),
-	);
+	let ids =
+		preparedIds ??
+		shuffled(
+			catalog
+				.filter(
+					(p) =>
+						!p.legacy && p.theme === setup.theme && p.format === setup.format,
+				)
+				.map((p) => p.id),
+		);
+	if (setup.format === "MUSIC") {
+		const unavailable = await getUnavailableSongTrackIds(tx);
+		ids = ids.filter((id) => {
+			const trackId = trackForPuzzle(id);
+			return trackId !== undefined && !unavailable.has(trackId);
+		});
+		// Availability may have changed while the first recording was preparing.
+		if (preparedIds && ids[0] !== preparedIds[0])
+			throw new PuzzleError(
+				503,
+				"CLIP_UNAVAILABLE",
+				"This recording became unavailable. Try starting the round again.",
+			);
+	}
 	if (!ids.length)
 		throw new PuzzleError(422, "PACK_EMPTY", "This pack has no puzzles");
 	const teams = (
@@ -114,9 +259,10 @@ export async function advancePuzzleRound(
 	seconds: number,
 	tx: QueryDb,
 	now: Date,
+	preparedIds?: string[],
 ) {
 	const round = await latest(gameId, tx);
-	if (!round) await openRound(gameId, setup, 1, seconds, tx, now);
+	if (!round) await openRound(gameId, setup, 1, seconds, tx, now, preparedIds);
 	else if (round.status === "OPEN" && now >= new Date(round.ends_at))
 		await finishPuzzleRound(gameId, tx);
 	else if (round.status === "RESULTS") await repairSelectors(round, tx);
@@ -187,6 +333,9 @@ export async function getPuzzleView(
 	const puzzle = catalog.find((p) => p.id === currentId);
 	const guesses = currentId ? (progress?.guesses[currentId] ?? []) : [];
 	const results = round.status === "RESULTS" ? await ranked(round, tx) : [];
+	const answerIds = new Set(
+		round.puzzle_ids.map((id) => puzzlesById.get(id)?.answerId),
+	);
 	return {
 		round: {
 			id: round.id,
@@ -226,11 +375,7 @@ export async function getPuzzleView(
 		options:
 			round.status === "OPEN"
 				? entries[round.theme]
-						.filter((e) =>
-							round.puzzle_ids.some(
-								(id) => catalog.find((p) => p.id === id)?.answerId === e.id,
-							),
-						)
+						.filter((e) => answerIds.has(e.id))
 						.map(({ id, name, aliases }) => ({
 							id,
 							name,
@@ -260,6 +405,7 @@ export async function loadSongClue(
 	puzzleId: string,
 	session: Session,
 	db: GameDb,
+	log?: SongPreviewLogger,
 ) {
 	const clue = await db.transaction(async (tx) => {
 		if (session.gameId !== gameId || !session.teamId)
@@ -310,17 +456,29 @@ export async function loadSongClue(
 		const mistakes = (progress.guesses[puzzle.id] ?? []).filter(
 			(g) => g !== puzzle.answerId,
 		).length;
-		return { trackId, seconds: [2, 4, 8, 15][Math.min(3, mistakes)] };
+		const upcoming = round.puzzle_ids
+			.filter(
+				(id) =>
+					id !== puzzle.id &&
+					!progress.solved.includes(id) &&
+					!progress.skipped.includes(id) &&
+					!progress.given_up.includes(id),
+			)
+			.slice(0, 2)
+			.map(trackForPuzzle)
+			.filter((id): id is number => id !== undefined);
+		return { trackId, seconds: [2, 4, 8, 15][Math.min(3, mistakes)], upcoming };
 	});
 	// Network requests and decoding happen after releasing the game lock.
 	try {
-		return { media: await songPreview(clue.trackId, clue.seconds) };
-	} catch {
-		throw new PuzzleError(
-			503,
-			"CLIP_UNAVAILABLE",
-			"Song clip unavailable. Retry or give up to reveal the song.",
-		);
+		const pending = songPreview(clue.trackId, clue.seconds);
+		void warmSongPreviews(clue.upcoming);
+		const media = await pending;
+		await recordSongPreviewResult(db, clue.trackId);
+		return { media };
+	} catch (error) {
+		await recordSongPreviewResult(db, clue.trackId, error);
+		throw previewError(error, clue.trackId, log);
 	}
 }
 
@@ -330,7 +488,87 @@ export async function puzzleAction(
 	session: Session,
 	db: GameDb,
 	clock = () => new Date(),
+	log?: SongPreviewLogger,
 ) {
+	let preparedIds: string[] | undefined;
+	if (action.kind === "format" && action.format === "MUSIC") {
+		const setup = await db.transaction(async (tx) => {
+			// Validate the chooser first, then release the lock before provider requests.
+			if (session.gameId !== gameId || !session.teamId)
+				throw new PuzzleError(
+					403,
+					"FORBIDDEN",
+					"Your car cannot play in this game",
+				);
+			const game = (
+				(await tx.query(
+					"SELECT status,started_at,puzzle_setup FROM games WHERE id::text=$1 FOR UPDATE",
+					[gameId],
+				)) as Rows<{
+					status: string;
+					started_at: Date;
+					puzzle_setup: PuzzleSetup | null;
+				}>
+			).rows[0];
+			if (!game) throw new PuzzleError(404, "GAME_NOT_FOUND", "Game not found");
+			const team = (
+				(await tx.query(
+					"SELECT status FROM car_teams WHERE id=$1 AND game_id=$2",
+					[session.teamId, gameId],
+				)) as Rows<{ status: string }>
+			).rows[0];
+			if (team?.status !== "ACTIVE")
+				throw new PuzzleError(403, "TEAM_LEFT", "Your car has left this game");
+			if (
+				game.status !== "WAITING" ||
+				!game.puzzle_setup ||
+				clock().getTime() >= new Date(game.started_at).getTime() + 7200000
+			)
+				throw new PuzzleError(
+					409,
+					"GAME_NOT_PLAYING",
+					"This game is not accepting puzzle actions",
+				);
+			const round = await latest(gameId, tx);
+			if (!round || action.roundId !== round.id)
+				throw new PuzzleError(
+					409,
+					"STALE_ROUND",
+					"This round has changed. Refresh and try again.",
+				);
+			if (round.status !== "RESULTS")
+				throw new PuzzleError(
+					409,
+					"ROUND_NOT_FINISHED",
+					"Wait for the round results",
+				);
+			await repairSelectors(round, tx);
+			if (session.teamId !== round.format_team_id)
+				throw new PuzzleError(
+					403,
+					"NOT_YOUR_PICK",
+					"Another car chooses this part of the next round",
+				);
+			if (!round.next_theme)
+				throw new PuzzleError(
+					409,
+					"THEME_REQUIRED",
+					"The theme must be chosen first",
+				);
+			const parsed = PuzzleSetupSchema.safeParse({
+				theme: round.next_theme,
+				format: action.format,
+			});
+			if (!parsed.success)
+				throw new PuzzleError(
+					422,
+					"UNSUPPORTED_FORMAT",
+					"That theme does not support this game type",
+				);
+			return parsed.data;
+		});
+		preparedIds = await prepareSongRound(setup.theme, db, log);
+	}
 	return db.transaction(async (tx) => {
 		let result:
 			| { name: string; correct: boolean; pointsAwarded: 0 | 1 }
@@ -433,6 +671,7 @@ export async function puzzleAction(
 					Math.min(remaining, game.round_interval_seconds),
 					tx,
 					now,
+					preparedIds,
 				);
 			}
 		} else {

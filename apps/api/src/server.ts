@@ -8,6 +8,11 @@ import { tick } from "./coordinator";
 import { createLiveServer } from "./live";
 import { registerGameRoutes } from "./routes/games";
 import type { GameDb } from "./services/games-services";
+import {
+	startSongPreviewWarming,
+	stopSongPreviewWarming,
+} from "./services/song-preview";
+import { startSongPreviewChecks } from "./services/song-preview-monitor";
 
 export function buildServer(
 	db: GameDb = createPostgresDb(),
@@ -28,7 +33,12 @@ export function buildServer(
 	if (webRoot) app.register(fastifyStatic, { root: webRoot, maxAge: 0 });
 	let timer: ReturnType<typeof setInterval> | undefined;
 	let running: Promise<unknown> | undefined;
+	let stopSongChecks: (() => Promise<void>) | undefined;
 	app.addHook("onListen", async () => {
+		startSongPreviewWarming();
+		stopSongChecks = startSongPreviewChecks(db, (details, message) =>
+			app.log.warn(details, message),
+		);
 		timer = setInterval(() => {
 			if (running) return;
 			running = tick(db, undefined, live.publishTransition)
@@ -45,7 +55,12 @@ export function buildServer(
 	app.register(registerGameRoutes, { db, live });
 	app.addHook("preClose", async () => {
 		clearInterval(timer);
-		await Promise.all([running, live.close()]);
+		await Promise.all([
+			running,
+			stopSongChecks?.(),
+			stopSongChecks ? stopSongPreviewWarming() : undefined,
+			live.close(),
+		]);
 	});
 	app.addHook("onClose", async () => {
 		await db.end();

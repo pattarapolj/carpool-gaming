@@ -18,6 +18,7 @@ import {
 	joinGame,
 	startGameTransition,
 } from "../services/games-services";
+import { PuzzleError } from "../services/puzzle-service";
 import {
 	endGameTransition,
 	leaveGameTransition,
@@ -177,6 +178,7 @@ export const registerGameRoutes: FastifyPluginAsync<{
 				parsedBody.data.practice,
 				session,
 				db,
+				(details, message) => request.log.warn(details, message),
 			);
 			live.publishTransition(started);
 			await live.publishUpdated(session);
@@ -237,6 +239,15 @@ export const registerGameRoutes: FastifyPluginAsync<{
 	});
 
 	app.setErrorHandler((error, request, reply) => {
+		if (error instanceof PuzzleError) {
+			return reply.code(error.statusCode).send({
+				error: {
+					code: error.code,
+					message: error.message,
+					requestId: request.id,
+				},
+			});
+		}
 		if (error instanceof RoundError) {
 			return reply.code(error.statusCode).send({
 				error: {

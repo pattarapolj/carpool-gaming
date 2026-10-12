@@ -72,6 +72,7 @@ export async function startGame(
 			method: "POST",
 			headers: { authorization: `Bearer ${session.token}` },
 			body: JSON.stringify(body),
+			signal: AbortSignal.timeout(35000),
 		},
 	);
 }
@@ -185,6 +186,7 @@ export async function sendPuzzleAction(
 			method: "POST",
 			headers: { authorization: `Bearer ${session.token}` },
 			body: JSON.stringify(PuzzleActionSchema.parse(action)),
+			signal: AbortSignal.timeout(35000),
 		},
 	);
 }
@@ -198,7 +200,7 @@ export async function getSongClip(session: GameSession, puzzleId: string) {
 			method: "POST",
 			headers: { authorization: `Bearer ${session.token}` },
 			body: JSON.stringify(body),
-			signal: AbortSignal.timeout(15000),
+			signal: AbortSignal.timeout(35000),
 		},
 	);
 	return media;

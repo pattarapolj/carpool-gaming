@@ -1,7 +1,15 @@
 import * as crypto from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
-import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	beforeEach,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { PUZZLE_PACKS } from "../../../packages/contracts/src/puzzles";
 import { tick } from "../src/coordinator";
 import { buildServer } from "../src/server";
@@ -21,6 +29,7 @@ vi.mock("node:crypto", async (importOriginal) => {
 let db: PGlite;
 let storage: GameDb;
 let app: ReturnType<typeof buildServer>;
+beforeEach(() => vi.stubGlobal("fetch", previewFixture));
 afterEach(() => {
 	vi.mocked(crypto.randomInt).mockReset();
 	vi.unstubAllGlobals();
@@ -464,10 +473,10 @@ it("keeps saved synthesized melody rounds playable", async () => {
 });
 
 it("offers a recoverable error for unavailable song previews and denies cars that left", async () => {
-	vi.spyOn(songProvider, "songPreview").mockRejectedValue(
-		new Error("Provider unavailable"),
-	);
 	const { id, tokens } = await setup("melodies", "MUSIC", 2);
+	vi.spyOn(songProvider, "songPreview").mockRejectedValue(
+		new songProvider.SongPreviewError("metadata", "PROVIDER_ERROR", true),
+	);
 	const p = (await snapshot(id, tokens[0])).puzzles;
 	const clip = () =>
 		app.inject({
@@ -478,7 +487,7 @@ it("offers a recoverable error for unavailable song previews and denies cars tha
 		});
 	const unavailable = await clip();
 	expect(unavailable.statusCode).toBe(503);
-	expect(unavailable.json().error.code).toBe("CLIP_UNAVAILABLE");
+	expect(unavailable.json().error.code).toBe("CLIP_TEMPORARILY_UNAVAILABLE");
 	await app.inject({
 		method: "POST",
 		url: `/v1/games/${id}/leave`,

@@ -4,6 +4,7 @@
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json && node scripts/copy-assets.cjs",
 		"db": "tsx src/db-command.ts",
+		"songs:check": "node dist/apps/api/scripts/check-song-previews.js",
 		"test:migrations": "tsx test/migrations-check.ts",
 		"dev": "tsx watch src/index.ts",
 		"start": "node dist/apps/api/src/index.js",

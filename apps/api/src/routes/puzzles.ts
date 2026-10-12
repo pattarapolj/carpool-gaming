@@ -33,6 +33,7 @@ export const registerPuzzleRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 				parsed.data.puzzleId,
 				session,
 				db,
+				(details, message) => request.log.warn(details, message),
 			);
 		} catch (error) {
 			if (error instanceof PuzzleError)
@@ -66,6 +67,8 @@ export const registerPuzzleRoutes: FastifyPluginAsync<{ db: GameDb }> = async (
 				parsed.data,
 				session,
 				db,
+				undefined,
+				(details, message) => request.log.warn(details, message),
 			);
 		} catch (error) {
 			if (error instanceof PuzzleError)

@@ -267,6 +267,85 @@ it("plays a two-car timed round, restores guesses and skipped puzzles, and start
 	}
 }, 60000);
 
+it("recovers from an unavailable song by skipping and revisiting without revealing it", async () => {
+	vi.stubGlobal("fetch", previewFixture);
+	const context = await harness.browser.newContext({
+		viewport: { width: 390, height: 844 },
+	});
+	const page = await context.newPage();
+	page.setDefaultTimeout(10000);
+	try {
+		await page.route("**/puzzles/clip", (route) =>
+			route.fulfill({
+				status: 503,
+				contentType: "application/json",
+				body: JSON.stringify({
+					error: {
+						code: "CLIP_TEMPORARILY_UNAVAILABLE",
+						message:
+							"The song provider is temporarily unavailable. Retry or skip this song.",
+					},
+				}),
+			}),
+		);
+		await page.goto(harness.url);
+		await page
+			.getByLabel("Game name", { exact: true })
+			.fill("Preview recovery");
+		await page.getByLabel("Car name", { exact: true }).fill("Recovery car");
+		await page.getByLabel("Game style").selectOption("puzzles");
+		await page.getByLabel("Theme", { exact: true }).selectOption("songs-2000s");
+		await page
+			.getByRole("button", { name: "Create game", exact: true })
+			.click();
+		await page
+			.getByRole("button", { name: "Start practice game", exact: true })
+			.click();
+		await page
+			.getByRole("alert")
+			.filter({ hasText: "The song provider is temporarily unavailable" })
+			.waitFor();
+		const original = await snapshot(page);
+		assert(original.puzzles?.puzzle);
+		const name = await target(original);
+		await page.screenshot({
+			path: join(harness.artifacts, "puzzles-song-unavailable-mobile.png"),
+			fullPage: true,
+		});
+		await page.unroute("**/puzzles/clip");
+		await page
+			.getByRole("button", { name: "Skip unavailable song", exact: true })
+			.click();
+		await expect
+			.poll(async () => (await snapshot(page)).puzzles?.skipped.length)
+			.toBe(1);
+		await page.reload();
+		await page.getByText("Skipped puzzles (1)", { exact: true }).click();
+		await page
+			.getByRole("button", {
+				name: `Revisit puzzle ${original.puzzles.puzzle.number}`,
+				exact: true,
+			})
+			.click();
+		await expect
+			.poll(async () => (await snapshot(page)).puzzles?.puzzle?.id)
+			.toBe(original.puzzles.puzzle.id);
+		await page.locator("audio").waitFor();
+		expect(
+			(await snapshot(page)).puzzles?.puzzle?.revealedAnswer,
+		).toBeUndefined();
+		expect((await snapshot(page)).puzzles?.solved).toBe(0);
+		await page.getByLabel("Search answers").fill(name);
+		await page.getByRole("button", { name: "Guess", exact: true }).click();
+		await expect
+			.poll(async () => (await snapshot(page)).puzzles?.solved)
+			.toBe(1);
+	} finally {
+		vi.unstubAllGlobals();
+		await context.close();
+	}
+}, 30000);
+
 it.each(
 	PUZZLE_PACKS.filter((pack) =>
 		pack.formats.some((format) => format === "MUSIC"),

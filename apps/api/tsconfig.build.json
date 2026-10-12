@@ -9,5 +9,5 @@
 		"types": ["node"],
 		"esModuleInterop": true
 	},
-	"include": ["src"]
+	"include": ["src", "scripts/check-song-previews.ts"]
 }
