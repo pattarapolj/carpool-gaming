@@ -184,8 +184,11 @@ async function main() {
 		await seed(db);
 		await seed(db);
 		assert.equal(
-			(await control.query(`SELECT count(*) FROM ${schema}.questions`)).rows[0]
-				.count,
+			(
+				await control.query(
+					`SELECT count(*) FROM ${schema}.questions WHERE is_active`,
+				)
+			).rows[0].count,
 			"5400",
 		);
 		assert.deepEqual(
@@ -288,8 +291,11 @@ async function main() {
 			stored,
 		);
 		assert.equal(
-			(await control.query(`SELECT count(*) FROM ${schema}.questions`)).rows[0]
-				.count,
+			(
+				await control.query(
+					`SELECT count(*) FROM ${schema}.questions WHERE is_active`,
+				)
+			).rows[0].count,
 			"5400",
 		);
 		await assert.rejects(

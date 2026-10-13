@@ -4,6 +4,8 @@ Carpool Quiz League is a slow-paced, passenger-operated trivia game for groups t
 
 ## Game model
 
+Movie and TV trivia focuses on story facts: character choices, relationships, powers, objects and memorable scenes. Breaking Bad and Marvel production-credit and episode-lookup questions are retired, and Harry Potter includes corrections and clearer book context. Each category still has 300 playable questions; historical questions remain stored for existing rounds. See the [story trivia guidelines](docs/story-trivia-guidelines.md).
+
 Choose **Timed puzzle rounds** under **Game style** when creating a game to play the new format. The host selects the opening theme/game type and a 5, 10 or 15-minute round duration. Each car works independently through the same shuffled puzzles, guessing until correct. Music rounds offer **Give up & reveal**: the title and artist stay visible to that car until **Next song**, earn zero points, and cannot be answered again. Unavailable song clips offer **Skip unavailable song** without revealing the answer; skipped songs and other puzzles can be revisited with saved clues. Searchable answer suggestions accept alternate names without charging spelling mistakes. Each guess shows correct/incorrect feedback, including after advancing to the next puzzle. The trip leaderboard includes one point per solved puzzle immediately; round-end scoring commits those points without counting them again.
 
 Last place chooses the next theme, then second-last chooses a supported game type and starts the next round. Equal scores share a placing; saved random tie ordering assigns two distinct chooser roles. Solo practice chooses both. If a chooser leaves, an active car takes over. Host end, reconnect and the two-hour trip limit still apply.
@@ -60,7 +62,7 @@ Copy-Item .env.example .env
 docker compose up --build
 ```
 
-The built app is available at `http://localhost:3000`; check `/health`. One unprivileged Fastify process serves the PWA, API and Socket.IO. Compose keeps PostgreSQL private, applies journaled migrations on startup and idempotently loads the 5,400-question bank. The app port is bound to localhost; use the documented HTTPS proxy before public hosting.
+The built app is available at `http://localhost:3000`; check `/health`. One unprivileged Fastify process serves the PWA, API and Socket.IO. Compose keeps PostgreSQL private, applies journaled migrations on startup and idempotently loads the 5,400 playable-question bank. The app port is bound to localhost; use the documented HTTPS proxy before public hosting.
 
 Set `FRONTEND_ORIGIN` to the exact browser origin (default example `http://localhost:3000`). HTTP and both Socket.IO transports enforce it; authenticated native clients without Origin remain supported. Sessions retain read access after COMPLETE/LEFT while their game/team exists. Refresh and automatic reconnect restore the authoritative snapshot, and connected clients reconcile every 15 seconds.
 

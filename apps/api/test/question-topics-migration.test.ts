@@ -61,7 +61,11 @@ it("upgrades existing games and questions without changing released content, and
 		]);
 		await db.exec(seed);
 		expect(
-			(await db.query("SELECT count(*)::int AS count FROM questions")).rows,
+			(
+				await db.query(
+					"SELECT count(*)::int AS count FROM questions WHERE is_active",
+				)
+			).rows,
 		).toEqual([{ count: 5400 }]);
 		await db.exec(
 			"INSERT INTO games(id,name,join_code,host_token_hash,round_interval_seconds) VALUES('22222222-2222-4222-8222-222222222222','New legacy caller','NEWOLD','hash',300)",
