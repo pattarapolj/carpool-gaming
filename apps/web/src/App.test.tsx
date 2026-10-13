@@ -196,6 +196,7 @@ it("creates with named topic selections and labels the full selection Mixed Topi
 		"Sports",
 		"Video Games",
 		"NBA",
+		"Disney & Pixar (animated-film spoilers)",
 	]) {
 		fireEvent.click(screen.getByRole("checkbox", { name: topic }));
 	}
@@ -237,6 +238,7 @@ it("prevents creating a game with no selected topics", () => {
 		"Sports",
 		"Video Games",
 		"NBA",
+		"Disney & Pixar (animated-film spoilers)",
 	]) {
 		fireEvent.click(screen.getByRole("checkbox", { name: topic }));
 	}
@@ -472,4 +474,38 @@ it("uses native sharing and clipboard with the same token-free URL", async () =>
 	});
 	await screen.findByText("Invite link copied.");
 	expect(writeText).toHaveBeenCalledWith(`${location.origin}/?join=AB12CD`);
+});
+
+it("creates a Disney & Pixar only trip from the topic selector", async () => {
+	mocks.create.mockResolvedValue({
+		game: { id: session.gameId },
+		hostToken: "new-host",
+	});
+	snapshot.game.status = "LOBBY";
+	snapshot.game.selectedTopics = ["disney-pixar"];
+	snapshot.round = null;
+	render(<App />);
+	fireEvent.click(screen.getByText("Quiz topics", { exact: true }));
+	const disney = screen.getByRole("checkbox", {
+		name: "Disney & Pixar (animated-film spoilers)",
+	});
+	for (const checkbox of screen.getAllByRole("checkbox"))
+		if (checkbox !== disney) fireEvent.click(checkbox);
+	fireEvent.change(screen.getByLabelText("Game name"), {
+		target: { value: "Animated adventure" },
+	});
+	fireEvent.change(screen.getByLabelText("Car name"), {
+		target: { value: "Disney fans" },
+	});
+	fireEvent.click(screen.getByRole("button", { name: "Create game" }));
+	await screen.findByText("Share this join code");
+	expect(mocks.create).toHaveBeenCalledWith({
+		name: "Animated adventure",
+		teamName: "Disney fans",
+		roundIntervalSeconds: 300,
+		topics: ["disney-pixar"],
+	});
+	expect(
+		screen.getByRole("group", { name: "Selected quiz topics" }).textContent,
+	).toContain("Disney & Pixar");
 });

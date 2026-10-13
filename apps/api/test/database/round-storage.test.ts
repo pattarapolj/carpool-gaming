@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { QuestionTopicIds } from "../../../../packages/contracts/src";
 
 let db: PGlite;
 const game = randomUUID();
@@ -25,7 +26,7 @@ afterAll(async () => {
 	if (db) await db.close();
 });
 
-it("loads the 5,400-question bank with valid topics, windows and typed keys", async () => {
+it("loads 300 playable questions per selectable topic with valid windows and typed keys", async () => {
 	const seed = await readFile(
 		new URL("../../seeds/questions.sql", import.meta.url),
 		"utf8",
@@ -44,27 +45,8 @@ it("loads the 5,400-question bank with valid topics, windows and typed keys", as
 	}>(
 		"SELECT id, type, choices, correct_answer, source_title, source_url, is_active, topic_id, answer_window_seconds FROM questions WHERE is_active ORDER BY id",
 	);
-	expect(rows).toHaveLength(5400);
-	for (const topic of [
-		"world",
-		"thailand",
-		"food",
-		"weird",
-		"nature",
-		"science",
-		"taylor-swift",
-		"breaking-bad",
-		"marvel",
-		"logic",
-		"lateral",
-		"probability",
-		"estimate",
-		"harry-potter",
-		"history",
-		"sports",
-		"video-games",
-		"nba",
-	]) {
+	expect(rows).toHaveLength(300 * QuestionTopicIds.length);
+	for (const topic of QuestionTopicIds) {
 		const topicRows = rows.filter((row) => row.topic_id === topic);
 		expect(topicRows, `${topic} bank size`).toHaveLength(300);
 		expect(
@@ -152,7 +134,9 @@ it("loads the 5,400-question bank with valid topics, windows and typed keys", as
 		"10000000-0000-4000-8000-000000000002",
 		"10000000-0000-4000-8000-000000000003",
 	]);
-	expect(new Set(content.map((row) => row.prompt)).size).toBe(5400);
+	expect(new Set(content.map((row) => row.prompt)).size).toBe(
+		300 * QuestionTopicIds.length,
+	);
 	for (const row of content) {
 		expect(row.prompt.trim()).not.toBe("");
 		expect(row.explanation.trim()).not.toBe("");

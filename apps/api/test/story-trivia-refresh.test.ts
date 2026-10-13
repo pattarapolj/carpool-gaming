@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, it } from "vitest";
+import { QuestionTopicIds } from "../../../packages/contracts/src";
 import { loadMigrations } from "../src/migrations";
 import type { GameDb } from "../src/services/auth";
 import { lockAnswer } from "../src/services/round-service";
@@ -89,14 +90,18 @@ it("retires weak questions while preserving every released fact and unrelated to
 			expect(active).toBe(oldActive);
 	}
 	const oldIds = new Set(legacy.map((q) => q.id));
-	const replacements = current.filter((q) => !oldIds.has(q.id));
+	const replacements = current.filter(
+		(q) => !oldIds.has(q.id) && topics.includes(String(q.topic_id)),
+	);
 	expect(replacements).toHaveLength(retired.length);
 	expect(
 		replacements.every(
 			(q) => q.is_active && topics.includes(String(q.topic_id)),
 		),
 	).toBe(true);
-	expect(current.filter((q) => q.is_active)).toHaveLength(5400);
+	expect(current.filter((q) => q.is_active)).toHaveLength(
+		300 * QuestionTopicIds.length,
+	);
 });
 
 it("reseeds without duplicating replacements or overwriting a previously stored question", async () => {

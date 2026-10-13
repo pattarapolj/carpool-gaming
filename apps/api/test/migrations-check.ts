@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { Pool } from "pg";
+import { QuestionTopicIds } from "../../../packages/contracts/src";
 import { loadMigrations, migrate, seed } from "../src/migrations";
 import { createPostgresDb } from "../src/server";
 import { testDatabaseUrl } from "./postgres-url";
@@ -189,7 +190,7 @@ async function main() {
 					`SELECT count(*) FROM ${schema}.questions WHERE is_active`,
 				)
 			).rows[0].count,
-			"5400",
+			String(300 * QuestionTopicIds.length),
 		);
 		assert.deepEqual(
 			(
@@ -296,7 +297,7 @@ async function main() {
 					`SELECT count(*) FROM ${schema}.questions WHERE is_active`,
 				)
 			).rows[0].count,
-			"5400",
+			String(300 * QuestionTopicIds.length),
 		);
 		await assert.rejects(
 			db.query("UPDATE answers SET value='false' WHERE id=$1", [answerId]),

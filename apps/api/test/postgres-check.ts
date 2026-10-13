@@ -6,6 +6,7 @@ import { io } from "socket.io-client";
 import {
 	GameCompletedSchema,
 	LiveSnapshotAckSchema,
+	QuestionTopicIds,
 	RoundRevealedSchema,
 } from "../../../packages/contracts/src/index";
 import { tick } from "../src/coordinator";
@@ -133,14 +134,17 @@ async function main() {
 		await control.query(seed);
 		const seeded = (await control.query("SELECT * FROM questions ORDER BY id"))
 			.rows;
-		assert.equal(seeded.filter((question) => question.is_active).length, 5400);
+		assert.equal(
+			seeded.filter((question) => question.is_active).length,
+			300 * QuestionTopicIds.length,
+		);
 		await control.query(seed);
 		assert.deepEqual(
 			(await control.query("SELECT * FROM questions ORDER BY id")).rows,
 			seeded,
 		);
 		console.log(
-			"PASS 5400 playable questions plus preserved archives load and reload without changing rows",
+			"PASS playable topic banks plus preserved archives load and reload without changing rows",
 		);
 		const fixtureQuestionIds = Array.from(
 			{ length: 25 },
