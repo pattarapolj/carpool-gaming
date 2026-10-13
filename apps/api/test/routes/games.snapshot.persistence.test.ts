@@ -21,6 +21,7 @@ describe("GET /v1/games/:gameId/snapshot", () => {
 			"007_puzzle_rounds.sql",
 			"013_expanded_quiz_topics.sql",
 			"014_nba_quiz_topic.sql",
+			"017_disney_pixar_quiz_topic.sql",
 		]) {
 			const migration = await readFile(
 				new URL(`../../migrations/${migrationName}`, import.meta.url),

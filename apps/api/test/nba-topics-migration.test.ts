@@ -32,7 +32,7 @@ it("adds NBA to new-game defaults while preserving existing topic selections", a
 					"SELECT selected_topics FROM games WHERE join_code='AFTER1'",
 				)
 			).rows,
-		).toEqual([{ selected_topics: [...QuestionTopicIds] }]);
+		).toEqual([{ selected_topics: QuestionTopicIds.slice(0, 18) }]);
 		await db.exec(
 			"INSERT INTO games(id,name,join_code,host_token_hash,round_interval_seconds,selected_topics) VALUES('33333333-3333-4333-8333-333333333333','NBA only','NBAONE','hash',300,ARRAY['nba'])",
 		);

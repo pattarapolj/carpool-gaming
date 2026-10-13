@@ -7,7 +7,7 @@ import {
 } from "../src";
 
 describe("CreateGameSchema", () => {
-	it("defines exactly the 18 selectable topic IDs and their display names", () => {
+	it("defines exactly the 19 selectable topic IDs and their display names", () => {
 		expect(QUESTION_TOPICS).toEqual({
 			world: "Around the World",
 			thailand: "Thailand",
@@ -27,6 +27,7 @@ describe("CreateGameSchema", () => {
 			sports: "Sports",
 			"video-games": "Video Games",
 			nba: "NBA",
+			"disney-pixar": "Disney & Pixar (animated-film spoilers)",
 		});
 		for (const id of Object.keys(QUESTION_TOPICS))
 			expect(QuestionTopicSchema.parse(id)).toBe(id);
@@ -60,7 +61,7 @@ describe("CreateGameSchema", () => {
 		).toBe(false);
 	});
 
-	it("defaults omitted topics to all 18 selectable topics", () => {
+	it("defaults omitted topics to all 19 selectable topics", () => {
 		expect(
 			CreateGameSchema.parse({ name: "Trip", roundIntervalSeconds: 300 }),
 		).toMatchObject({
@@ -83,6 +84,7 @@ describe("CreateGameSchema", () => {
 				"sports",
 				"video-games",
 				"nba",
+				"disney-pixar",
 			],
 		});
 	});
@@ -167,4 +169,14 @@ describe("CreateGameSchema", () => {
 			}).success,
 		).toBe(false);
 	});
+});
+
+it("accepts Disney & Pixar as the only selected quiz topic", () => {
+	expect(
+		CreateGameSchema.parse({
+			name: "Animated adventure",
+			roundIntervalSeconds: 300,
+			topics: ["disney-pixar"],
+		}).topics,
+	).toEqual(["disney-pixar"]);
 });
